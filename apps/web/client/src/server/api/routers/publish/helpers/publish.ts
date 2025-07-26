@@ -1,4 +1,3 @@
-import type { WebSocketSession } from '@codesandbox/sdk';
 import { DefaultSettings } from '@onlook/constants';
 import type { DrizzleDb } from '@onlook/db/src/client';
 import type { Deployment } from '@onlook/db/src/schema/project/deployment';
@@ -9,6 +8,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import { PublishManager } from '../manager';
 import { deployFreestyle } from './deploy';
+import { extractEnvVarsFromSandbox } from './env';
 import { forkBuildSandbox } from './fork';
 import { getProjectUrls, getSandboxId, updateDeployment } from './helpers';
 
@@ -36,7 +36,7 @@ export async function publish({
             });
         }
 
-        const { session, sandboxId: forkedSandboxId }: { session: WebSocketSession, sandboxId: string } = await forkBuildSandbox(sandboxId, userId, deploymentId);
+        const { session, sandboxId: forkedSandboxId } = await forkBuildSandbox(sandboxId, userId, deploymentId);
 
         try {
             const updateDeploymentResult2 = await updateDeployment(db, deploymentId, {
@@ -51,6 +51,7 @@ export async function publish({
                     message: 'Update deployment failed',
                 });
             }
+
 
             const publishManager = new PublishManager(session);
             const files = await publishManager.publish({
@@ -72,16 +73,21 @@ export async function publish({
                 });
             }
 
+            // Note: Prefer user provided env vars over sandbox env vars
+            const sandboxEnvVars = await extractEnvVarsFromSandbox(session);
+            const mergedEnvVars = { ...sandboxEnvVars, ...(envVars ?? {}) };
+
             await deployFreestyle({
                 files,
                 urls: deploymentUrls,
-                envVars: envVars ?? {},
+                envVars: mergedEnvVars,
             });
         } finally {
             await session.disconnect();
         }
     } catch (error) {
-        updateDeployment(db, deploymentId, {
+        console.error(error);
+        await updateDeployment(db, deploymentId, {
             status: DeploymentStatus.FAILED,
             error: error instanceof Error ? error.message : 'Unknown error',
             progress: 100,

@@ -1,27 +1,33 @@
 import type { ReaddirEntry, WatchEvent, WebSocketSession } from '@codesandbox/sdk';
-import { EXCLUDED_SYNC_DIRECTORIES, JSX_FILE_EXTENSIONS } from '@onlook/constants';
-import { type SandboxFile, type TemplateNode } from '@onlook/models';
+import { EXCLUDED_SYNC_DIRECTORIES, NEXT_JS_FILE_EXTENSIONS, PRELOAD_SCRIPT_SRC } from '@onlook/constants';
+import { RouterType, type SandboxFile, type TemplateNode } from '@onlook/models';
 import { getContentFromTemplateNode, getTemplateNodeChild } from '@onlook/parser';
-import { getBaseName, getDirName, isImageFile, isSubdirectory, LogTimer } from '@onlook/utility';
+import { getBaseName, getDirName, isImageFile, isRootLayoutFile, isSubdirectory, LogTimer } from '@onlook/utility';
 import { makeAutoObservable, reaction } from 'mobx';
 import path from 'path';
+import { env } from 'process';
 import type { EditorEngine } from '../engine';
+import { detectRouterTypeInSandbox } from '../pages/helper';
 import { FileEventBus } from './file-event-bus';
 import { FileSyncManager } from './file-sync';
 import { FileWatcher } from './file-watcher';
-import { formatContent, normalizePath } from './helpers';
+import { normalizePath } from './helpers';
 import { TemplateNodeMapper } from './mapping';
 import { SessionManager } from './session';
 
+const isDev = env.NODE_ENV === 'development';
 export class SandboxManager {
     readonly session: SessionManager;
     readonly fileEventBus: FileEventBus = new FileEventBus();
 
+    // Add router configuration
+    private _routerConfig: { type: RouterType; basePath: string } | null = null;
+
     private fileWatcher: FileWatcher | null = null;
-    private fileSync: FileSyncManager
-    private templateNodeMap: TemplateNodeMapper
-    private isIndexed = false;
-    private isIndexing = false;
+    private fileSync: FileSyncManager;
+    private templateNodeMap: TemplateNodeMapper;
+    private _isIndexed = false;
+    private _isIndexing = false;
 
     constructor(private readonly editorEngine: EditorEngine) {
         this.session = new SessionManager(this.editorEngine);
@@ -32,7 +38,7 @@ export class SandboxManager {
         reaction(
             () => this.session.session,
             (session) => {
-                this.isIndexed = false;
+                this._isIndexed = false;
                 if (session) {
                     this.index();
                 }
@@ -40,67 +46,72 @@ export class SandboxManager {
         );
     }
 
+    get isIndexed() {
+        return this._isIndexed;
+    }
+
+    get isIndexing() {
+        return this._isIndexing;
+    }
+
+    get routerConfig(): { type: RouterType; basePath: string } | null {
+        return this._routerConfig;
+    }
+
     async index(force = false) {
-        if (this.isIndexing || (this.isIndexed && !force)) {
+        console.log('[SandboxManager] Starting indexing, force:', force);
+
+        if (this._isIndexing || (this._isIndexed && !force)) {
             return;
         }
 
         if (!this.session.session) {
-            console.error('No session found');
+            console.error('No session found for indexing');
             return;
         }
 
-        this.isIndexing = true;
+        this._isIndexing = true;
         const timer = new LogTimer('Sandbox Indexing');
 
         try {
+            // Detect router configuration first
+            if (!this._routerConfig) {
+                this._routerConfig = await detectRouterTypeInSandbox(this);
+                if (this._routerConfig) {
+                    timer.log(
+                        `Router detected: ${this._routerConfig.type} at ${this._routerConfig.basePath}`,
+                    );
+                }
+            }
+
             // Get all file paths
             const allFilePaths = await this.getAllFilePathsFlat('./', EXCLUDED_SYNC_DIRECTORIES);
             timer.log(`File discovery completed - ${allFilePaths.length} files found`);
 
-            // Categorize files for optimized processing
-            const { imageFiles, jsxFiles, otherFiles } =
-                this.categorizeFilesForIndexing(allFilePaths);
-
-            const BATCH_SIZE = 50;
-
-            // Track image files first
-            if (imageFiles.length > 0) {
-                timer.log(`Tracking ${imageFiles.length} image files`);
-                for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
-                    const batch = imageFiles.slice(i, i + BATCH_SIZE);
-                    this.fileSync.writeEmptyFilesBatch(batch, 'binary');
+            for (const filePath of allFilePaths) {
+                // Track image files first
+                if (isImageFile(filePath)) {
+                    this.fileSync.writeEmptyFile(filePath, 'binary');
+                    continue;
                 }
-            }
-
-            // Process JSX files
-            if (jsxFiles.length > 0) {
-                timer.log(`Processing ${jsxFiles.length} JSX files in batches of ${BATCH_SIZE}`);
-                for (let i = 0; i < jsxFiles.length; i += BATCH_SIZE) {
-                    const batch = jsxFiles.slice(i, i + BATCH_SIZE);
-                    await this.processJsxFilesBatch(batch);
-                }
-            }
-
-            // Process other files
-            if (otherFiles.length > 0) {
-                timer.log(
-                    `Processing ${otherFiles.length} other files in batches of ${BATCH_SIZE}`,
-                );
-                for (let i = 0; i < otherFiles.length; i += BATCH_SIZE) {
-                    const batch = otherFiles.slice(i, i + BATCH_SIZE);
-                    await this.processTextFilesBatch(batch);
+                const remoteFile = await this.readRemoteFile(filePath);
+                if (remoteFile) {
+                    this.fileSync.updateCache(remoteFile);
+                    if (this.isJsxFile(filePath)) {
+                        await this.processFileForMapping(remoteFile);
+                    }
                 }
             }
 
             await this.watchFiles();
-            this.isIndexed = true;
+            this._isIndexed = true;
             timer.log('Indexing completed successfully');
+
         } catch (error) {
             console.error('Error during indexing:', error);
             throw error;
         } finally {
-            this.isIndexing = false;
+            this._isIndexing = false;
         }
     }
 
@@ -142,60 +153,6 @@ export class SandboxManager {
         return allPaths;
     }
 
-    /**
-     * Categorize files for optimized processing
-     */
-    private categorizeFilesForIndexing(filePaths: string[]): {
-        imageFiles: string[];
-        jsxFiles: string[];
-        otherFiles: string[];
-    } {
-        const imageFiles: string[] = [];
-        const jsxFiles: string[] = [];
-        const otherFiles: string[] = [];
-
-        for (const filePath of filePaths) {
-            const normalizedPath = normalizePath(filePath);
-
-            if (isImageFile(normalizedPath)) {
-                imageFiles.push(normalizedPath);
-            } else {
-                const extension = path.extname(filePath);
-                if (JSX_FILE_EXTENSIONS.includes(extension)) {
-                    jsxFiles.push(normalizedPath);
-                } else {
-                    otherFiles.push(normalizedPath);
-                }
-            }
-        }
-
-        return { imageFiles, jsxFiles, otherFiles };
-    }
-
-    private async processJsxFilesBatch(filePaths: string[]): Promise<void> {
-        const fileContents = await this.fileSync.readOrFetchBatch(
-            filePaths,
-            this.readRemoteFile.bind(this),
-        );
-
-        const mappingPromises = Object.keys(fileContents).map(async (filePath) => {
-            try {
-                await this.processFileForMapping(filePath);
-            } catch (error) {
-                console.warn(`Error processing mapping for JSX file ${filePath}:`, error);
-            }
-        });
-
-        await Promise.all(mappingPromises);
-    }
-
-    /**
-     * Process text files in parallel batches
-     */
-    private async processTextFilesBatch(filePaths: string[]): Promise<void> {
-        await this.fileSync.readOrFetchBatch(filePaths, this.readRemoteFile.bind(this));
-    }
-
     private async readRemoteFile(filePath: string): Promise<SandboxFile | null> {
         if (!this.session.session) {
             console.error('No session found for remote read');
@@ -218,14 +175,16 @@ export class SandboxManager {
         }
     }
 
-    private async writeRemoteFile(filePath: string, content: string | Uint8Array): Promise<boolean> {
+    private async writeRemoteFile(
+        filePath: string,
+        content: string | Uint8Array,
+    ): Promise<boolean> {
         if (!this.session.session) {
             console.error('No session found for remote write');
             return false;
         }
 
         try {
-            await this.processFileForMapping(filePath);
             if (content instanceof Uint8Array) {
                 await this.session.session.fs.writeFile(filePath, content);
             } else {
@@ -258,22 +217,36 @@ export class SandboxManager {
 
     async writeFile(path: string, content: string): Promise<boolean> {
         const normalizedPath = normalizePath(path);
-        const formattedContent = await formatContent(normalizedPath, content);
-        return this.fileSync.write(
-            normalizedPath,
-            formattedContent,
-            this.writeRemoteFile.bind(this),
-        );
+        let writeContent = content;
+
+        // If the file is a JSX file, we need to process it for mapping before writing
+        if (this.isJsxFile(normalizedPath)) {
+            try {
+                const { newContent } = await this.templateNodeMap.processFileForMapping(
+                    normalizedPath,
+                    content,
+                    this.routerConfig?.type,
+                );
+                writeContent = newContent;
+            } catch (error) {
+                console.error(`Error processing file ${normalizedPath}:`, error);
+            }
+        }
+        return this.fileSync.write(normalizedPath, writeContent, this.writeRemoteFile.bind(this));
+    }
+
+    isJsxFile(filePath: string): boolean {
+        const extension = path.extname(filePath);
+        if (!extension || !NEXT_JS_FILE_EXTENSIONS.includes(extension)) {
+            return false;
+        }
+        return true;
     }
 
     async writeBinaryFile(path: string, content: Buffer | Uint8Array): Promise<boolean> {
         const normalizedPath = normalizePath(path);
         try {
-            return this.fileSync.write(
-                normalizedPath,
-                content,
-                this.writeRemoteFile.bind(this),
-            );
+            return this.fileSync.write(normalizedPath, content, this.writeRemoteFile.bind(this));
         } catch (error) {
             console.error(`Error writing binary file ${normalizedPath}:`, error);
             return false;
@@ -399,7 +372,7 @@ export class SandboxManager {
                         paths: [normalizedPath],
                         timestamp: Date.now(),
                     });
-                    continue
+                    continue;
                 }
 
                 await this.fileSync.delete(normalizedPath);
@@ -409,6 +382,9 @@ export class SandboxManager {
                     paths: [normalizedPath],
                     timestamp: Date.now(),
                 });
+            }
+            if (isDev && event.paths.some((path) => path.includes(PRELOAD_SCRIPT_SRC))) {
+                await this.editorEngine.preloadScript.ensurePreloadScriptFile();
             }
         } else if (eventType === 'change' || eventType === 'add') {
             const session = this.session.session;
@@ -430,13 +406,11 @@ export class SandboxManager {
                 if (stat?.type === 'directory') {
                     const normalizedPath = normalizePath(path);
                     this.fileSync.updateDirectoryCache(normalizedPath);
-                    continue
+                    continue;
                 }
 
                 const normalizedPath = normalizePath(path);
-                const cachedFile = this.fileSync.readCache(normalizedPath);
-                await this.handleFileChangedEvent(normalizedPath, cachedFile);
-
+                await this.handleFileChangedEvent(normalizedPath);
                 this.fileEventBus.publish({
                     type: eventType,
                     paths: [normalizedPath],
@@ -474,7 +448,9 @@ export class SandboxManager {
         return;
     }
 
-    async handleFileChangedEvent(normalizedPath: string, cachedFile: SandboxFile | undefined) {
+    async handleFileChangedEvent(normalizedPath: string) {
+        const cachedFile = this.fileSync.readCache(normalizedPath);
+
         if (isImageFile(normalizedPath)) {
             if (!cachedFile || cachedFile.content === null) {
                 // If the file was not cached, we need to write an empty file
@@ -497,12 +473,14 @@ export class SandboxManager {
             }
             if (remoteFile.type === 'text') {
                 // If the file is a text file, we need to process it for mapping
-                await this.processFileForMapping(normalizedPath);
                 this.fileSync.updateCache({
                     type: 'text',
                     path: normalizedPath,
                     content: remoteFile.content,
                 });
+                if (remoteFile.content !== cachedFile?.content) {
+                    await this.processFileForMapping(remoteFile);
+                }
             } else {
                 this.fileSync.updateCache({
                     type: 'binary',
@@ -513,18 +491,34 @@ export class SandboxManager {
         }
     }
 
-    async processFileForMapping(file: string) {
-        const extension = path.extname(file);
-        if (!extension || !JSX_FILE_EXTENSIONS.includes(extension)) {
-            return;
-        }
+    async processFileForMapping(file: SandboxFile) {
+        try {
+            if (file.type === 'binary' || !this.isJsxFile(file.path)) {
+                return;
+            }
 
-        const normalizedPath = normalizePath(file);
-        await this.templateNodeMap.processFileForMapping(
-            normalizedPath,
-            this.readFile.bind(this),
-            this.writeFile.bind(this),
-        );
+            // If this is a layout file, ensure the preload script file exists
+            if (isRootLayoutFile(file.path, this.routerConfig?.type)) {
+                try {
+                    await this.editorEngine.preloadScript.ensurePreloadScriptFile();
+                } catch (error) {
+                    console.warn(`[SandboxManager] Failed to ensure preload script file for layout ${file.path}:`, error);
+                    // Continue processing even if preload script file check fails
+                }
+            }
+
+            const { modified, newContent } = await this.templateNodeMap.processFileForMapping(
+                file.path,
+                file.content,
+                this.routerConfig?.type,
+            );
+
+            if (modified && file.content !== newContent) {
+                await this.writeFile(file.path, newContent);
+            }
+        } catch (error) {
+            console.error(`Error processing file ${file.path}:`, error);
+        }
     }
 
     async getTemplateNode(oid: string): Promise<TemplateNode | null> {
@@ -536,7 +530,6 @@ export class SandboxManager {
         child: TemplateNode,
         index: number,
     ): Promise<{ instanceId: string; component: string } | null> {
-
         const codeBlock = await this.getCodeBlock(parentOid);
 
         if (codeBlock == null) {
@@ -680,8 +673,33 @@ export class SandboxManager {
         }
     }
 
-    get isIndexingFiles() {
-        return this.isIndexing;
+    /**
+     * Gets the root layout path and router config
+     */
+    async getRootLayoutPath(): Promise<string | null> {
+        const routerConfig = this.routerConfig;
+        if (!routerConfig) {
+            console.log('Could not detect Next.js router type');
+            return null;
+        }
+
+        let layoutFileName: string;
+
+        if (routerConfig.type === RouterType.PAGES) {
+            layoutFileName = '_app';
+        } else {
+            layoutFileName = 'layout';
+        }
+
+        for (const extension of NEXT_JS_FILE_EXTENSIONS) {
+            const layoutPath = path.join(routerConfig.basePath, `${layoutFileName}${extension}`);
+            if (await this.fileExists(layoutPath)) {
+                return normalizePath(layoutPath);
+            }
+        }
+
+        console.log('Could not find layout file');
+        return null;
     }
 
     clear() {
@@ -690,7 +708,8 @@ export class SandboxManager {
         this.fileSync.clear();
         this.templateNodeMap.clear();
         this.session.clear();
-        this.isIndexed = false;
-        this.isIndexing = false;
+        this._isIndexed = false;
+        this._isIndexing = false;
+        this._routerConfig = null;
     }
 }
