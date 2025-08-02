@@ -182,7 +182,7 @@ declare const messages: {
             }
         },
         "footer": {
-            "unusedMessages": "Unused chat messages don't rollover to the next month"
+            "unusedMessages": "Unused chat messages will roll over to the next month."
         }
     },
     "editor": {
@@ -229,6 +229,9 @@ declare const messages: {
                         "input": {
                             "placeholder": "Type your message...",
                             "tooltip": "Chat with AI about the selected element"
+                        },
+                        "mode": {
+                            "tooltip": "Switch between Build and Ask modes"
                         },
                         "controls": {
                             "newChat": "New Chat",

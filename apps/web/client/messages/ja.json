@@ -78,7 +78,7 @@
             }
         },
         "footer": {
-            "unusedMessages": "未使用のチャットメッセージは翌月に繰り越されません。"
+            "unusedMessages": "未使用のチャットメッセージは翌月に繰り越されます。"
         }
     },
     "editor": {
@@ -125,6 +125,9 @@
                         "input": {
                             "placeholder": "メッセージを入力...",
                             "tooltip": "選択した要素についてAIとチャット"
+                        },
+                        "mode": {
+                            "tooltip": "ビルドモードと質問モードを切り替え"
                         },
                         "controls": {
                             "newChat": "新規チャット",

@@ -179,7 +179,7 @@
             }
         },
         "footer": {
-            "unusedMessages": "사용하지 않은 채팅 메시지는 다음 달로 이월되지 않습니다."
+            "unusedMessages": "사용하지 않은 채팅 메시지는 다음 달로 이월됩니다."
         }
     },
     "editor": {
@@ -226,6 +226,9 @@
                         "input": {
                             "placeholder": "메시지를 입력하세요...",
                             "tooltip": "선택한 요소에 대해 AI와 채팅"
+                        },
+                        "mode": {
+                            "tooltip": "빌드 모드와 질문 모드 전환"
                         },
                         "controls": {
                             "newChat": "새 채팅",

@@ -1,9 +1,21 @@
+import { env } from '@/env';
 import { createClient as createTRPCClient } from '@/trpc/request-server';
+import { trackEvent } from '@/utils/analytics/server';
 import { createClient as createSupabaseClient } from '@/utils/supabase/request-server';
 import { askToolSet, buildToolSet, getAskModeSystemPrompt, getCreatePageSystemPrompt, getSystemPrompt, initModel } from '@onlook/ai';
-import { ChatType, CLAUDE_MODELS, LLMProvider, type Usage, UsageType } from '@onlook/models';
+import { ChatType, CLAUDE_MODELS, type InitialModelPayload, LLMProvider, OPENROUTER_MODELS, type Usage, UsageType } from '@onlook/models';
 import { generateObject, NoSuchToolError, streamText } from 'ai';
 import { type NextRequest } from 'next/server';
+
+const isProd = env.NODE_ENV === 'production';
+
+const MainModelConfig: InitialModelPayload = isProd ? {
+    provider: LLMProvider.OPENROUTER,
+    model: OPENROUTER_MODELS.CLAUDE_4_SONNET,
+} : {
+    provider: LLMProvider.ANTHROPIC,
+    model: CLAUDE_MODELS.SONNET_4,
+};
 
 export async function POST(req: NextRequest) {
     try {
@@ -20,6 +32,13 @@ export async function POST(req: NextRequest) {
 
         const usageCheckResult = await checkMessageLimit(req);
         if (usageCheckResult.exceeded) {
+            trackEvent({
+                distinctId: user.id,
+                event: 'message_limit_exceeded',
+                properties: {
+                    usage: usageCheckResult.usage,
+                },
+            });
             return new Response(JSON.stringify({
                 error: 'Message limit exceeded. Please upgrade to a paid plan.',
                 code: 402,
@@ -83,10 +102,25 @@ export const getSupabaseUser = async (request: NextRequest) => {
 
 export const streamResponse = async (req: NextRequest) => {
     const { messages, maxSteps, chatType } = await req.json();
-    const { model, providerOptions } = await initModel({
-        provider: LLMProvider.ANTHROPIC,
-        model: CLAUDE_MODELS.SONNET_4,
-    });
+    const { model, providerOptions, headers } = await initModel(MainModelConfig);
+
+    // Updating the usage record and rate limit is done here to avoid
+    // abuse in the case where a single user sends many concurrent requests.
+    // If the call below fails, the user will not be penalized.
+    let usageRecordId: string | undefined;
+    let rateLimitId: string | undefined;
+    if (chatType === ChatType.EDIT) {
+        const user = await getSupabaseUser(req);
+        if (!user) {
+            throw new Error('User not found');
+        }
+        const { api } = await createTRPCClient(req);
+        const incrementRes = await api.usage.increment({
+            type: UsageType.MESSAGE,
+        });
+        usageRecordId = incrementRes?.usageRecordId;
+        rateLimitId = incrementRes?.rateLimitId;
+    }
 
     let systemPrompt: string;
     switch (chatType) {
@@ -104,6 +138,7 @@ export const streamResponse = async (req: NextRequest) => {
     const toolSet = chatType === ChatType.ASK ? askToolSet : buildToolSet;
     const result = streamText({
         model,
+        headers,
         messages: [
             {
                 role: 'system',
@@ -143,25 +178,36 @@ export const streamResponse = async (req: NextRequest) => {
 
             return { ...toolCall, args: JSON.stringify(repairedArgs) };
         },
-        onError: (error) => {
+        onError: async (error) => {
             console.error('Error in chat', error);
+            // if there was an error with the API, do not penalize the user
+            if (usageRecordId && rateLimitId) {
+                await createTRPCClient(req)
+                    .then(({ api }) => api.usage.revertIncrement({ usageRecordId, rateLimitId }))
+                    .catch(error => console.error('Error in chat usage decrement', error));
+            }
         },
     });
 
-    try {
-        if (chatType === ChatType.EDIT) {
-            const user = await getSupabaseUser(req);
-            if (!user) {
-                throw new Error('User not found');
-            }
-            const { api } = await createTRPCClient(req);
-            await api.usage.increment({
-                type: UsageType.MESSAGE,
-            });
+    return result.toDataStreamResponse(
+        {
+            getErrorMessage: errorHandler,
         }
-    } catch (error) {
-        console.error('Error in chat usage increment', error);
+    );
+}
+
+export function errorHandler(error: unknown) {
+    if (error == null) {
+        return 'unknown error';
     }
 
-    return result.toDataStreamResponse();
+    if (typeof error === 'string') {
+        return error;
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return JSON.stringify(error);
 }

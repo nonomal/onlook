@@ -179,7 +179,7 @@
             }
         },
         "footer": {
-            "unusedMessages": "未使用的聊天消息不会结转到下个月"
+            "unusedMessages": "未使用的聊天消息会结转到下个月"
         }
     },
     "editor": {
@@ -226,6 +226,9 @@
                         "input": {
                             "placeholder": "输入您的消息…",
                             "tooltip": "就所选元素与 AI 进行讨论"
+                        },
+                        "mode": {
+                            "tooltip": "在构建和询问模式之间切换"
                         },
                         "controls": {
                             "newChat": "新聊天",
