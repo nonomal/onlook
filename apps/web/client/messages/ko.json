@@ -42,11 +42,14 @@
             "showInExplorer": "탐색기에서 보기",
             "renameProject": "프로젝트 이름 변경",
             "deleteProject": "프로젝트 삭제",
+            "cloneProject": "프로젝트 복제",
             "cancel": "취소",
             "delete": "삭제",
             "rename": "이름 변경",
+            "clone": "복제",
             "goToAllProjects": "모든 프로젝트로 이동",
             "newProject": "새 프로젝트",
+            "blankProject": "빈 프로젝트",
             "startFromScratch": "처음부터 시작하기",
             "importProject": "프로젝트 가져오기",
             "subscriptions": "구독하기",
@@ -54,7 +57,8 @@
             "downloadCode": "코드 다운로드",
             "downloadingCode": "다운로드 준비 중...",
             "downloadSuccess": "다운로드가 성공적으로 시작되었습니다.",
-            "downloadError": "다운로드 준비에 실패했습니다."
+            "downloadError": "다운로드 준비에 실패했습니다.",
+            "recentProjects": "최근 프로젝트"
         },
         "dialogs": {
             "delete": {
@@ -65,6 +69,12 @@
             "rename": {
                 "title": "프로젝트 이름 변경",
                 "label": "프로젝트 이름",
+                "error": "프로젝트 이름은 비워둘 수 없습니다."
+            },
+            "clone": {
+                "title": "프로젝트 복제",
+                "label": "프로젝트 이름",
+                "placeholder": "복제된 프로젝트의 이름을 입력하세요",
                 "error": "프로젝트 이름은 비워둘 수 없습니다."
             }
         },
@@ -83,14 +93,14 @@
     "welcome": {
         "title": "Onlook에 오신 것을 환영합니다",
         "titleReturn": "Onlook에 다시 오신 것을 환영합니다",
-        "description": "Onlook은 React 앱을 위한 오픈소스 비주얼 에디터입니다. 라이브 제품에서 직접 디자인하세요.",
+        "description": "AI를 활용한 차세대 비주얼 코드 에디터로, 디자이너와 제품 관리자가 코드로 웹 경험을 만들 수 있습니다.",
         "alpha": "알파",
         "login": {
             "github": "GitHub으로 로그인",
             "google": "Google로 로그인",
             "lastUsed": "마지막으로 로그인한 계정",
             "loginToEdit": "편집하려면 로그인하세요",
-            "shareProjects": "프로젝트를 공유하고, 협업하고, 코드로 더 많은 디자인을 해보세요."
+            "shareProjects": "크레딧 카드 없이 • 초 단위로 사이트 만들기"
         },
         "terms": {
             "agreement": "가입함으로써 다음에 동의합니다:",
@@ -179,7 +189,7 @@
             }
         },
         "footer": {
-            "unusedMessages": "사용하지 않은 채팅 메시지는 다음 달로 이월되지 않습니다."
+            "unusedMessages": "사용하지 않은 채팅 메시지는 다음 달로 이월됩니다."
         }
     },
     "editor": {
@@ -188,6 +198,11 @@
                 "name": "디자인",
                 "description": "웹사이트 디자인 편집 및 수정",
                 "tooltip": "디자인 모드로 변경"
+            },
+            "code": {
+                "name": "코드",
+                "description": "웹사이트 코드 편집 및 수정",
+                "tooltip": "코드 모드로 변경"
             },
             "preview": {
                 "name": "미리보기",
@@ -227,16 +242,24 @@
                             "placeholder": "메시지를 입력하세요...",
                             "tooltip": "선택한 요소에 대해 AI와 채팅"
                         },
+                        "mode": {
+                            "tooltip": "빌드 모드와 질문 모드 전환"
+                        },
                         "controls": {
                             "newChat": "새 채팅",
                             "history": "채팅 기록"
                         },
                         "settings": {
                             "showSuggestions": "제안 표시",
+                            "showMiniChat": "미니 채팅 표시",
+                            "autoApplyCode": "결과 자동 적용",
                             "expandCodeBlocks": "렌더링 시 코드 표시"
                         },
                         "miniChat": {
                             "button": "AI와 채팅하기"
+                        },
+                        "openInCode": {
+                            "button": "코드에서 열기"
                         }
                     },
                     "styles": {
@@ -275,6 +298,7 @@
                         "emptyState": "설정을 편집할 창(윈도우)을 선택하세요"
                     },
                     "brand": "브랜드",
+                    "branches": "브랜치",
                     "apps": "앱"
                 }
             }

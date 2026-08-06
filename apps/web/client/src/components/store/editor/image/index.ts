@@ -1,86 +1,125 @@
-import { DefaultSettings } from '@onlook/constants';
-import type { ActionTarget, ImageContentData, InsertImageAction } from '@onlook/models/actions';
-import {
-    convertToBase64,
-    getBaseName,
-    getMimeType,
-    isImageFile,
-} from '@onlook/utility/src/file';
-import { makeAutoObservable, reaction } from 'mobx';
+import { type ActionTarget, type ImageContentData } from '@onlook/models';
+import { convertToBase64DataUrl, getBaseName, getMimeType, isImageFile, sanitizeFilename, stripImageFolderPrefix } from '@onlook/utility';
+import { makeAutoObservable } from 'mobx';
+import path from 'path';
 import type { EditorEngine } from '../engine';
-import { generateNewFolderPath } from '@onlook/utility';
 
 export class ImageManager {
     private _imagePaths: string[] = [];
-    private _isScanning = false;
+    private _isSelectingImage = false;
+    private _selectedImage: ImageContentData | null = null;
+    private _previewImage: ImageContentData | null = null;
 
     constructor(private editorEngine: EditorEngine) {
         makeAutoObservable(this);
-
-        reaction(
-            () => this.editorEngine.sandbox.isIndexingFiles,
-            async (isIndexingFiles) => {
-                if (!isIndexingFiles) {
-                    await this.scanImages();
-                }
-            }
-        );
     }
+
+    init() { }
 
     get imagePaths() {
         return this._imagePaths;
     }
 
-    get isScanning() {
-        return this._isScanning;
+    get isSelectingImage() {
+        return this._isSelectingImage;
+    }
+
+    get selectedImage() {
+        return this._selectedImage;
+    }
+
+    get previewImage() {
+        return this._previewImage;
+    }
+
+    setPreviewImage(image: ImageContentData | null) {
+        try {
+            this._previewImage = image;
+            const selected = this.editorEngine.elements.selected;
+
+            if (!selected || selected.length === 0) {
+                console.warn('No elements selected to apply background image');
+                return;
+            }
+
+            if (image?.originPath) {
+                const url = stripImageFolderPrefix(image.originPath);
+                this.editorEngine.style.updateMultiple({
+                    backgroundImage: `url('/${url}')`,
+                });
+            } else if (this.selectedImage?.originPath) {
+                const url = stripImageFolderPrefix(this.selectedImage.originPath);
+                this.editorEngine.style.updateMultiple({
+                    backgroundImage: `url('/${url}')`,
+                });
+            } else {
+                this.editorEngine.style.updateMultiple({
+                    backgroundImage: 'none',
+                });
+            }
+        } catch (error) {
+            console.error('Failed to set preview image:', error);
+        }
+    }
+
+    setSelectedImage(image: ImageContentData | null) {
+        try {
+            this._selectedImage = image;
+
+            const selected = this.editorEngine.elements.selected;
+
+            if (!selected || selected.length === 0) {
+                console.warn('No elements selected to apply background image');
+                return;
+            }
+
+            if (!image?.originPath) {
+                console.warn('Image origin path is missing');
+                return;
+            }
+
+            try {
+                const url = stripImageFolderPrefix(image.originPath);
+
+                if (!url) {
+                    throw new Error('Failed to generate relative path');
+                }
+
+                const styles = {
+                    backgroundImage: `url('/${url}')`,
+                };
+
+                this.editorEngine.style.updateMultiple(styles);
+            } catch (urlError) {
+                console.error('Failed to process image path:', urlError);
+                throw new Error('Invalid image path');
+            }
+        } catch (error) {
+            console.error('Failed to apply background image:', error);
+        }
+    }
+
+    setIsSelectingImage(isSelectingImage: boolean) {
+        this._isSelectingImage = isSelectingImage;
     }
 
     async upload(file: File, destinationFolder: string): Promise<void> {
         try {
-            const path = `${destinationFolder}/${file.name}`;
+            // Sanitize filename from user upload
+            const sanitizedName = sanitizeFilename(file.name);
+            const filePath = path.join(destinationFolder, sanitizedName);
             const uint8Array = new Uint8Array(await file.arrayBuffer());
-            await this.editorEngine.sandbox.writeBinaryFile(path, uint8Array);
-            await this.scanImages();
+            await this.editorEngine.activeSandbox.writeFile(filePath, uint8Array);
         } catch (error) {
             console.error('Error uploading image:', error);
             throw error;
         }
     }
 
-    async delete(originPath: string): Promise<void> {
-        try {
-            await this.editorEngine.sandbox.delete(originPath);
-            await this.scanImages();
-        } catch (error) {
-            console.error('Error deleting image:', error);
-            throw error;
-        }
-    }
-
-    async rename(originPath: string, newName: string): Promise<void> {
-        try {
-            const newPath = generateNewFolderPath(originPath, newName, 'rename');
-            await this.editorEngine.sandbox.rename(originPath, newPath);
-            await this.scanImages();
-        } catch (error) {
-            console.error('Error renaming image:', error);
-            throw error;
-        }
-    }
-
-    async paste(base64Image: string, mimeType: string): Promise<InsertImageAction | undefined> {
-        console.log('paste image');
-        return;
-    }
-
     search(name: string) {
         return this.imagePaths.find((img) => name.includes(img));
     }
 
-    remove() {
-        // this.editorEngine.style.update('backgroundImage', 'none');
-        // sendAnalytics('image-removed');
-    }
 
     getTargets() {
         const selected = this.editorEngine.elements.selected;
@@ -92,41 +131,12 @@ export class ImageManager {
 
         const targets: ActionTarget[] = selected.map((element) => ({
             frameId: element.frameId,
+            branchId: element.branchId,
             domId: element.domId,
             oid: element.oid,
         }));
 
         return targets;
-    }
-
-    async scanImages() {
-        if (this._isScanning) {
-            return;
-        }
-
-        this._isScanning = true;
-
-        try {
-            const files = await this.editorEngine.sandbox.listFilesRecursively(DefaultSettings.IMAGE_FOLDER);
-            if (!files) {
-                console.error('No files found in image folder');
-                return;
-            }
-            if (files.length === 0) {
-                this._imagePaths = [];
-                return;
-            }
-            this._imagePaths = files.filter((file: string) => isImageFile(file))
-        } catch (error) {
-            console.error('Error scanning images:', error);
-            this._imagePaths = [];
-        } finally {
-            this._isScanning = false;
-        }
-    }
-
-    clear() {
-        this._imagePaths = [];
     }
 
     /**
@@ -140,19 +150,24 @@ export class ImageManager {
                 return null;
             }
 
-            // Read the binary file using the sandbox
-            const file = await this.editorEngine.sandbox.readFile(imagePath);
-            if (!file || file.type === 'text' || !file.content) {
-                console.warn(`Failed to read binary data for ${imagePath}`);
-                return null;
-            }
-
             // Determine MIME type based on file extension
             const mimeType = getMimeType(imagePath);
 
-            // Convert binary data to base64
-            const base64Data = convertToBase64(file.content);
-            const content = `data:${mimeType};base64,${base64Data}`;
+            // Read the file using the sandbox
+            const file = await this.editorEngine.activeSandbox.readFile(imagePath);
+            let content: string;
+
+            // Handle SVG files more efficiently by reading as text if available
+            if (mimeType === 'image/svg+xml' && typeof file === 'string') {
+                // For SVG files read as text, create a data URL directly
+                content = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(file)}`;
+            } else if (file instanceof Uint8Array) {
+                // For binary files, convert to base64
+                content = convertToBase64DataUrl(file, mimeType);
+            } else {
+                console.warn(`Unexpected file type or content format for ${imagePath}`);
+                return null;
+            }
 
             return {
                 originPath: imagePath,
@@ -176,16 +191,23 @@ export class ImageManager {
 
         try {
             // Process all images in parallel
-            const imagePromises = imagePaths.map(path => this.readImageContent(path));
+            const imagePromises = imagePaths.map((path) => this.readImageContent(path));
             const results = await Promise.all(imagePromises);
 
             // Filter out null results
-            const validImages = results.filter((result): result is ImageContentData => result !== null);
-
+            const validImages = results.filter((result) => !!result);
             return validImages;
         } catch (error) {
             console.error('Error reading images content:', error);
             return [];
         }
     }
+
+    clear() {
+        this._imagePaths = [];
+        this._selectedImage = null;
+        this._previewImage = null;
+        this._isSelectingImage = false;
+    }
+
 }

@@ -9,7 +9,8 @@ export const env = createEnv({
     server: {
         NODE_ENV: z.enum(['development', 'test', 'production']),
         CSB_API_KEY: z.string(),
-        SUPABASE_DATABASE_URL: z.string().url(),
+        SUPABASE_DATABASE_URL: z.url(),
+        SUPABASE_SERVICE_ROLE_KEY: z.string(),
         RESEND_API_KEY: z.string().optional(),
         FREESTYLE_API_KEY: z.string().optional(),
 
@@ -32,16 +33,33 @@ export const env = createEnv({
         GOOGLE_PRIVATE_KEY_ID: z.string().optional(),
 
         // Model providers
-        ANTHROPIC_API_KEY: z.string(),
+        OPENROUTER_API_KEY: z.string(),
+        ANTHROPIC_API_KEY: z.string().optional(),
         GOOGLE_AI_STUDIO_API_KEY: z.string().optional(),
         OPENAI_API_KEY: z.string().optional(),
 
         // n8n
         N8N_WEBHOOK_URL: z.string().optional(),
         N8N_API_KEY: z.string().optional(),
+        N8N_LANDING_FORM_URL: z.string().url().optional(),
+        N8N_LANDING_FORM_HEADER_NAME: z.string().optional(),
+        N8N_LANDING_FORM_HEADER_VALUE: z.string().optional(),
 
         // Firecrawl
         FIRECRAWL_API_KEY: z.string().optional(),
+
+        // Exa
+        EXA_API_KEY: z.string().optional(),
+
+        // Langfuse
+        LANGFUSE_SECRET_KEY: z.string().optional(),
+        LANGFUSE_PUBLIC_KEY: z.string().optional(),
+        LANGFUSE_BASEURL: z.string().url().optional(),
+
+        // GitHub
+        GITHUB_APP_ID: z.string().optional(),
+        GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+        GITHUB_APP_SLUG: z.string().optional(),
     },
     /**
      * Specify your client-side environment variables schema here. This way you can ensure the app
@@ -49,13 +67,15 @@ export const env = createEnv({
      * `NEXT_PUBLIC_`.
      */
     client: {
-        NEXT_PUBLIC_SITE_URL: z.string().url().default('http://localhost:3000'),
+        NEXT_PUBLIC_SITE_URL: z.url().default('http://localhost:3000'),
         NEXT_PUBLIC_SUPABASE_URL: z.string(),
         NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string(),
         NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
         NEXT_PUBLIC_POSTHOG_HOST: z.string().optional(),
-        NEXT_PUBLIC_FEATURE_COLLABORATION: z.boolean().default(false),
+        NEXT_PUBLIC_GLEAP_API_KEY: z.string().optional(),
+        NEXT_PUBLIC_FEATURE_COLLABORATION: z.coerce.boolean().default(false),
         NEXT_PUBLIC_HOSTING_DOMAIN: z.string().optional(),
+        NEXT_PUBLIC_RB2B_ID: z.string().optional(),
     },
 
     /**
@@ -70,6 +90,7 @@ export const env = createEnv({
 
         // Supabase
         SUPABASE_DATABASE_URL: process.env.SUPABASE_DATABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
         NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
         NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -77,6 +98,10 @@ export const env = createEnv({
         // Posthog
         NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
         NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+        NEXT_PUBLIC_GLEAP_API_KEY: process.env.NEXT_PUBLIC_GLEAP_API_KEY,
+
+        // RB2B
+        NEXT_PUBLIC_RB2B_ID: process.env.NEXT_PUBLIC_RB2B_ID,
 
         // Hosting
         FREESTYLE_API_KEY: process.env.FREESTYLE_API_KEY,
@@ -104,13 +129,30 @@ export const env = createEnv({
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
         GOOGLE_AI_STUDIO_API_KEY: process.env.GOOGLE_AI_STUDIO_API_KEY,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
 
         // n8n
         N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL,
         N8N_API_KEY: process.env.N8N_API_KEY,
+        N8N_LANDING_FORM_URL: process.env.N8N_LANDING_FORM_URL,
+        N8N_LANDING_FORM_HEADER_NAME: process.env.N8N_LANDING_FORM_HEADER_NAME,
+        N8N_LANDING_FORM_HEADER_VALUE: process.env.N8N_LANDING_FORM_HEADER_VALUE,
 
         // Firecrawl
         FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+
+        // Exa
+        EXA_API_KEY: process.env.EXA_API_KEY,
+
+        // Langfuse
+        LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
+        LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
+        LANGFUSE_BASEURL: process.env.LANGFUSE_BASEURL,
+
+        // GitHub
+        GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+        GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+        GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG,
     },
     /**
      * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

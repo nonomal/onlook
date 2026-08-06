@@ -1,10 +1,9 @@
 import { Orientation, Theme } from './frame';
+
 export const APP_NAME = 'Onlook';
 export const APP_SCHEMA = 'onlook';
 export const HOSTING_DOMAIN = 'onlook.live';
-export const CUSTOM_OUTPUT_DIR = '.next-prod';
 export const MAX_NAME_LENGTH = 50;
-
 export enum EditorAttributes {
     // DOM attributes
     ONLOOK_TOOLBAR = 'onlook-toolbar',
@@ -39,8 +38,6 @@ export const DefaultSettings = {
     SCALE: 0.7,
     PAN_POSITION: { x: 175, y: 100 },
     URL: 'http://localhost:3000/',
-    FRAME_POSITION: { x: 0, y: 0 },
-    FRAME_DIMENSION: { width: 1536, height: 960 },
     ASPECT_RATIO_LOCKED: false,
     DEVICE: 'Custom:Custom',
     THEME: Theme.System,
@@ -53,14 +50,15 @@ export const DefaultSettings = {
     },
     IMAGE_FOLDER: 'public',
     IMAGE_DIMENSION: { width: '100px', height: '100px' },
-    FONT_FOLDER: 'public/fonts',
+    FONT_FOLDER: 'fonts',
     FONT_CONFIG: 'app/fonts.ts',
     TAILWIND_CONFIG: 'tailwind.config.ts',
     CHAT_SETTINGS: {
         showSuggestions: true,
         autoApplyCode: true,
         expandCodeBlocks: false,
-        showMiniChat: true,
+        showMiniChat: false,
+        maxImages: 5,
     },
     EDITOR_SETTINGS: {
         shouldWarnDelete: false,
@@ -70,8 +68,3 @@ export const DefaultSettings = {
 };
 
 export const DEFAULT_COLOR_NAME = 'DEFAULT';
-
-export const PRELOAD_SCRIPT_SRC =
-    'https://cdn.jsdelivr.net/gh/onlook-dev/onlook@main/apps/web/preload/dist/index.js';
-
-export const DEPRECATED_PRELOAD_SCRIPT_SRC = 'onlook-dev/web';

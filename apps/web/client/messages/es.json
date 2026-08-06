@@ -42,11 +42,14 @@
             "showInExplorer": "Mostrar en Explorador",
             "renameProject": "Renombrar Proyecto",
             "deleteProject": "Eliminar Proyecto",
+            "cloneProject": "Clonar Proyecto",
             "cancel": "Cancelar",
             "delete": "Eliminar",
             "rename": "Renombrar",
+            "clone": "Clonar",
             "goToAllProjects": "Ir a todos los Proyectos",
             "newProject": "Nuevo Proyecto",
+            "blankProject": "Proyecto en Blanco",
             "startFromScratch": "Empezar desde cero",
             "importProject": "Importar un proyecto",
             "subscriptions": "Suscripciones",
@@ -54,7 +57,8 @@
             "downloadCode": "Descargar Código",
             "downloadingCode": "Preparando descarga...",
             "downloadSuccess": "Descarga iniciada correctamente",
-            "downloadError": "Error al preparar la descarga"
+            "downloadError": "Error al preparar la descarga",
+            "recentProjects": "Proyectos Recientes"
         },
         "dialogs": {
             "delete": {
@@ -65,6 +69,12 @@
             "rename": {
                 "title": "Renombrar Proyecto",
                 "label": "Nombre del Proyecto",
+                "error": "El nombre del proyecto no puede estar vacío"
+            },
+            "clone": {
+                "title": "Clonar Proyecto",
+                "label": "Nombre del Proyecto",
+                "placeholder": "Ingrese el nombre para el proyecto clonado",
                 "error": "El nombre del proyecto no puede estar vacío"
             }
         },
@@ -83,14 +93,14 @@
     "welcome": {
         "title": "Bienvenido a Onlook",
         "titleReturn": "Bienvenido de vuelta a Onlook",
-        "description": "Onlook es un editor visual de código abierto para aplicaciones React. Diseñe directamente en su producto en vivo.",
+        "description": "Un editor visual de código de última generación que permite a diseñadores y gerentes de productos crear experiencias web con IA.",
         "alpha": "Alpha",
         "login": {
             "github": "Iniciar sesión con GitHub",
             "google": "Iniciar sesión con Google",
             "lastUsed": "Usó esto la última vez",
             "loginToEdit": "Iniciar sesión para Editar",
-            "shareProjects": "Comparta proyectos, colabore y diseñe más en código."
+            "shareProjects": "Sin tarjeta de crédito • Crea un sitio en segundos"
         },
         "terms": {
             "agreement": "Al registrarse, acepta nuestra",
@@ -179,7 +189,7 @@
             }
         },
         "footer": {
-            "unusedMessages": "Los mensajes de chat no utilizados no se transfieren al siguiente mes"
+            "unusedMessages": "Los mensajes de chat no utilizados se transferirán al siguiente mes"
         }
     },
     "editor": {
@@ -188,6 +198,11 @@
                 "name": "Diseño",
                 "description": "Edite y modifique el diseño de su sitio web",
                 "tooltip": "Cambiar al modo diseño"
+            },
+            "code": {
+                "name": "Código",
+                "description": "Edite y modifique el código de su sitio web",
+                "tooltip": "Cambiar al modo código"
             },
             "preview": {
                 "name": "Vista Previa",
@@ -236,10 +251,15 @@
                         },
                         "settings": {
                             "showSuggestions": "Mostrar sugerencias",
+                            "showMiniChat": "Mostrar mini chat",
+                            "autoApplyCode": "Aplicar resultados automáticamente",
                             "expandCodeBlocks": "Mostrar código durante la renderización"
                         },
                         "miniChat": {
                             "button": "Chatear con IA"
+                        },
+                        "openInCode": {
+                            "button": "Abrir en Code"
                         }
                     },
                     "styles": {
@@ -278,6 +298,7 @@
                         "emptyState": "Seleccione una ventana para editar su configuración"
                     },
                     "brand": "Marca",
+                    "branches": "Ramas",
                     "apps": "Aplicaciones"
                 }
             }

@@ -7,6 +7,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, or } from 'drizzle-orm';
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../../trpc";
+import { verifyDeploymentAccess, verifyProjectAccess } from '../project/helper';
 import { updateDeployment } from './helpers';
 import { createDeployment, publish } from './helpers/index.ts';
 
@@ -16,6 +17,7 @@ export const deploymentRouter = createTRPCRouter({
         type: z.nativeEnum(DeploymentType),
     })).query(async ({ ctx, input }) => {
         const { projectId, type } = input;
+        await verifyProjectAccess(ctx.db, ctx.user.id, projectId);
         const deployment = await ctx.db.query.deployments.findFirst({
             where: and(
                 eq(deployments.projectId, projectId),
@@ -25,16 +27,17 @@ export const deploymentRouter = createTRPCRouter({
         });
         return deployment ?? null;
     }),
-    update: protectedProcedure.input(z.object({
-        deploymentId: z.string(),
-        deployment: deploymentUpdateSchema
-    })).mutation(async ({ ctx, input }) => {
-        const { deploymentId, deployment } = input;
-        return await updateDeployment(ctx.db, deploymentId, deployment);
+    update: protectedProcedure.input(deploymentUpdateSchema).mutation(async ({ ctx, input }) => {
+        if (!input.id) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Deployment id is required' });
+        }
+        await verifyDeploymentAccess(ctx.db, ctx.user.id, input.id);
+        return await updateDeployment(ctx.db, input);
     }),
     create: protectedProcedure.input(z.object({
         projectId: z.string(),
-        type: z.nativeEnum(DeploymentType),
+        type: z.enum(DeploymentType),
+        sandboxId: z.string(),
         buildScript: z.string().optional(),
         buildFlags: z.string().optional(),
         envVars: z.record(z.string(), z.string()).optional(),
@@ -42,12 +45,14 @@ export const deploymentRouter = createTRPCRouter({
         const {
             projectId,
             type,
+            sandboxId,
             buildScript,
             buildFlags,
             envVars,
         } = input;
 
         const userId = ctx.user.id;
+        await verifyProjectAccess(ctx.db, userId, projectId);
 
         const existingDeployment = await ctx.db.query.deployments.findFirst({
             where: and(eq(
@@ -69,13 +74,22 @@ export const deploymentRouter = createTRPCRouter({
             });
         }
 
-        const deployment = await createDeployment(ctx.db, projectId, type, userId);
-        return { deploymentId: deployment.id };
+        return await createDeployment({
+            db: ctx.db,
+            projectId,
+            type,
+            userId,
+            sandboxId,
+            buildScript,
+            buildFlags,
+            envVars,
+        });
     }),
     run: protectedProcedure.input(z.object({
         deploymentId: z.string(),
-    })).mutation(async ({ ctx, input }) => {
+    })).mutation(async ({ ctx, input }): Promise<void> => {
         const { deploymentId } = input;
+        await verifyDeploymentAccess(ctx.db, ctx.user.id, deploymentId);
         const existingDeployment = await ctx.db.query.deployments.findFirst({
             where: and(
                 eq(deployments.id, deploymentId),
@@ -107,18 +121,21 @@ export const deploymentRouter = createTRPCRouter({
             await publish({
                 db: ctx.db,
                 deployment: existingDeployment,
+                sandboxId: existingDeployment.sandboxId!,
             });
-            await updateDeployment(ctx.db, deploymentId, {
+            await updateDeployment(ctx.db, {
+                id: deploymentId,
                 status: DeploymentStatus.COMPLETED,
                 message: 'Deployment Success!',
+                envVars: existingDeployment.envVars ?? {},
             });
-            return {
-                success: true,
-            };
         } catch (error) {
-            await updateDeployment(ctx.db, deploymentId, {
+            console.error(error);
+            await updateDeployment(ctx.db, {
+                id: deploymentId,
                 status: DeploymentStatus.FAILED,
                 message: 'Failed to publish deployment',
+                envVars: existingDeployment.envVars ?? {},
             });
             throw error;
         }
@@ -127,9 +144,16 @@ export const deploymentRouter = createTRPCRouter({
         deploymentId: z.string(),
     })).mutation(async ({ ctx, input }) => {
         const { deploymentId } = input;
-        await updateDeployment(ctx.db, deploymentId, {
+        await verifyDeploymentAccess(ctx.db, ctx.user.id, deploymentId);
+        const deployment = await ctx.db.query.deployments.findFirst({
+            where: eq(deployments.id, deploymentId),
+        });
+
+        await updateDeployment(ctx.db, {
+            id: deploymentId,
             status: DeploymentStatus.CANCELLED,
             message: 'Cancelled by user',
+            envVars: deployment?.envVars ?? {},
         });
     }),
 });

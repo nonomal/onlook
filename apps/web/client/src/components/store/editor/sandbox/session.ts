@@ -1,56 +1,141 @@
 import { api } from '@/trpc/client';
-import type { WebSocketSession } from '@codesandbox/sdk';
-import { connectToSandbox } from '@codesandbox/sdk/browser';
+import { CodeProvider, createCodeProviderClient, type Provider } from '@onlook/code-provider';
+import type { Branch } from '@onlook/models';
 import { makeAutoObservable } from 'mobx';
-import type { EditorEngine } from '../engine';
+import type { ErrorManager } from '../error';
 import { CLISessionImpl, CLISessionType, type CLISession, type TerminalSession } from './terminal';
 
 export class SessionManager {
-    session: WebSocketSession | null = null;
+    provider: Provider | null = null;
     isConnecting = false;
-    terminalSessions: Map<string, CLISession> = new Map();
-    activeTerminalSessionId: string = 'cli';
+    terminalSessions = new Map<string, CLISession>();
+    activeTerminalSessionId = 'cli';
 
-    constructor(private readonly editorEngine: EditorEngine) {
+    constructor(
+        private readonly branch: Branch,
+        private readonly errorManager: ErrorManager
+    ) {
         makeAutoObservable(this);
     }
 
-    async start(sandboxId: string, userId?: string) {
-        if (this.isConnecting || this.session) {
+    async start(sandboxId: string, userId?: string): Promise<void> {
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY_MS = 2000;
+
+        if (this.isConnecting || this.provider) {
             return;
         }
+
         this.isConnecting = true;
-        const session = await api.sandbox.start.mutate({ sandboxId, userId });
-        this.session = await connectToSandbox({
-            session,
-            getSession: async (id) => {
-                return await api.sandbox.start.mutate({ sandboxId: id, userId });
+
+        const attemptConnection = async () => {
+            const provider = await createCodeProviderClient(CodeProvider.CodeSandbox, {
+                providerOptions: {
+                    codesandbox: {
+                        sandboxId,
+                        userId,
+                        initClient: true,
+                        getSession: async (sandboxId, userId) => {
+                            return api.sandbox.start.mutate({ sandboxId });
+                        },
+                    },
+                },
+            });
+
+            this.provider = provider;
+            await this.createTerminalSessions(provider);
+        };
+
+        let lastError: Error | null = null;
+
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                await attemptConnection();
+                this.isConnecting = false;
+                return;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                console.error(`Failed to start sandbox session (attempt ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
+
+                this.provider = null;
+
+                if (attempt < MAX_RETRIES) {
+                    console.log(`Retrying sandbox connection in ${RETRY_DELAY_MS}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+                }
+            }
+        }
+
+        this.isConnecting = false;
+        throw lastError;
+    }
+
+    async restartDevServer(): Promise<boolean> {
+        if (!this.provider) {
+            console.error('No provider found in restartDevServer');
+            return false;
+        }
+        const { task } = await this.provider.getTask({
+            args: {
+                id: 'dev',
             },
         });
-        this.session.keepActiveWhileConnected(true);
-        this.isConnecting = false;
-        await this.createTerminalSessions(this.session);
+        if (task) {
+            await task.restart();
+            return true;
+        }
+        return false;
+    }
+
+    async readDevServerLogs(): Promise<string> {
+        const result = await this.provider?.getTask({ args: { id: 'dev' } });
+        if (result) {
+            return await result.task.open();
+        }
+        return 'Dev server not found';
     }
 
     getTerminalSession(id: string) {
         return this.terminalSessions.get(id) as TerminalSession | undefined;
     }
 
-    async createTerminalSessions(session: WebSocketSession) {
-        const task = new CLISessionImpl('Server (readonly)', CLISessionType.TASK, session, this.editorEngine.error);
+    async createTerminalSessions(provider: Provider) {
+        const task = new CLISessionImpl(
+            'server',
+            CLISessionType.TASK,
+            provider,
+            this.errorManager,
+        );
         this.terminalSessions.set(task.id, task);
-        const terminal = new CLISessionImpl('CLI', CLISessionType.TERMINAL, session, this.editorEngine.error);
+        const terminal = new CLISessionImpl(
+            'terminal',
+            CLISessionType.TERMINAL,
+            provider,
+            this.errorManager,
+        );
 
         this.terminalSessions.set(terminal.id, terminal);
         this.activeTerminalSessionId = task.id;
+
+        // Initialize the sessions after creation
+        try {
+            await Promise.all([
+                task.initTask(),
+                terminal.initTerminal()
+            ]);
+        } catch (error) {
+            console.error('Failed to initialize terminal sessions:', error);
+        }
     }
 
     async disposeTerminal(id: string) {
         const terminal = this.terminalSessions.get(id) as TerminalSession | undefined;
         if (terminal) {
-            if (terminal.type === 'terminal') {
+            if (terminal.type === CLISessionType.TERMINAL) {
                 await terminal.terminal?.kill();
-                terminal.xterm?.dispose();
+                if (terminal.xterm) {
+                    terminal.xterm.dispose();
+                }
             }
             this.terminalSessions.delete(id);
         }
@@ -62,8 +147,8 @@ export class SessionManager {
 
     async reconnect(sandboxId: string, userId?: string) {
         try {
-            if (!this.session) {
-                console.error('No session found');
+            if (!this.provider) {
+                console.error('No provider found in reconnect');
                 return;
             }
 
@@ -74,24 +159,32 @@ export class SessionManager {
             }
 
             // Attempt soft reconnect
-            await this.session.reconnect()
+            await this.provider?.reconnect();
 
             const isConnected2 = await this.ping();
             if (isConnected2) {
                 return;
             }
-
-            await this.start(sandboxId, userId);
+            await this.restartProvider(sandboxId, userId);
         } catch (error) {
             console.error('Failed to reconnect to sandbox', error);
             this.isConnecting = false;
         }
     }
 
+    async restartProvider(sandboxId: string, userId?: string) {
+        if (!this.provider) {
+            return;
+        }
+        await this.provider.destroy();
+        this.provider = null;
+        await this.start(sandboxId, userId);
+    }
+
     async ping() {
-        if (!this.session) return false;
+        if (!this.provider) return false;
         try {
-            await this.session.commands.run('echo "ping"');
+            await this.provider.runCommand({ args: { command: 'echo "ping"' } });
             return true;
         } catch (error) {
             console.error('Failed to connect to sandbox', error);
@@ -99,62 +192,56 @@ export class SessionManager {
         }
     }
 
-    async runCommand(command: string, streamCallback?: (output: string) => void): Promise<{
+    async runCommand(
+        command: string,
+        streamCallback?: (output: string) => void,
+        ignoreError: boolean = false,
+    ): Promise<{
         output: string;
         success: boolean;
         error: string | null;
     }> {
         try {
-            if (!this.session) {
-                throw new Error('No session found');
+            if (!this.provider) {
+                throw new Error('No provider found in runCommand');
             }
 
-            const terminalSession = Array.from(this.terminalSessions.values()).find(session => session.type === CLISessionType.TERMINAL) as TerminalSession | undefined;
+            // Append error suppression if ignoreError is true
+            const finalCommand = ignoreError ? `${command} 2>/dev/null || true` : command;
 
-            if (!terminalSession?.terminal) {
-                throw new Error('No terminal session found');
-            }
-
-            const cmd = await this.session.commands.runBackground(command, {
-                name: 'user command'
-            });
-
-            terminalSession.xterm?.write(command + '\n');
-
-            await cmd.open();
-            const disposer = cmd.onOutput((output) => {
-                streamCallback?.(output);
-                terminalSession.xterm?.write(output);
-            });
-
-            const finalOutput = await cmd.waitUntilComplete();
-
-            disposer.dispose();
+            streamCallback?.(finalCommand + '\n');
+            const { output } = await this.provider.runCommand({ args: { command: finalCommand } });
+            streamCallback?.(output);
             return {
-                output: finalOutput,
+                output,
                 success: true,
-                error: null
+                error: null,
             };
         } catch (error) {
             console.error('Error running command:', error);
             return {
                 output: '',
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error occurred'
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
             };
         }
     }
 
     async clear() {
-        await this.session?.disconnect();
-        this.session = null;
-        this.isConnecting = false;
-        this.terminalSessions.forEach(terminal => {
-            if (terminal.type === 'terminal') {
+        // probably need to be moved in `Provider.destroy()`
+        this.terminalSessions.forEach((terminal) => {
+            if (terminal.type === CLISessionType.TERMINAL) {
                 terminal.terminal?.kill();
-                terminal.xterm?.dispose();
+                if (terminal.xterm) {
+                    terminal.xterm.dispose();
+                }
             }
         });
+        if (this.provider) {
+            await this.provider.destroy();
+        }
+        this.provider = null;
+        this.isConnecting = false;
         this.terminalSessions.clear();
     }
 }

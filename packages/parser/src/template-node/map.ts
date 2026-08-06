@@ -1,13 +1,24 @@
-import { CoreElementType, DynamicType, type TemplateNode } from '@onlook/models';
+import type { TemplateNode } from '@onlook/models';
+import { CoreElementType, DynamicType } from '@onlook/models';
+
+import { getOidFromJsxElement } from '../code-edit/helpers';
 import { isReactFragment } from '../helpers';
 import { getExistingOid } from '../ids';
-import { type NodePath, type t as T, types as t, traverse } from '../packages';
-import { createTemplateNode } from './helpers';
-import { getOidFromJsxElement } from '../code-edit/helpers';
+import type { NodePath, T } from '../packages';
+import { t, traverse } from '../packages';
 import { getAstFromContent } from '../parse';
+import { createTemplateNode } from './helpers';
 
-export function createTemplateNodeMap(ast: T.File, filename: string): Map<string, TemplateNode> {
-    const mapping: Map<string, TemplateNode> = new Map();
+export function createTemplateNodeMap({
+    ast,
+    filename,
+    branchId,
+}: {
+    ast: T.File;
+    filename: string;
+    branchId: string;
+}): Map<string, TemplateNode> {
+    const mapping = new Map<string, TemplateNode>();
     const componentStack: string[] = [];
     const dynamicTypeStack: DynamicType[] = [];
 
@@ -96,6 +107,7 @@ export function createTemplateNodeMap(ast: T.File, filename: string): Map<string
 
             const newTemplateNode = createTemplateNode(
                 path,
+                branchId,
                 filename,
                 componentStack,
                 dynamicType,
@@ -125,8 +137,8 @@ export function getDynamicTypeInfo(path: NodePath<T.JSXElement>): DynamicType | 
     const dynamicType = isConditionalRoot
         ? DynamicType.CONDITIONAL
         : isArrayMapRoot
-          ? DynamicType.ARRAY
-          : undefined;
+            ? DynamicType.ARRAY
+            : undefined;
 
     return dynamicType ?? null;
 }
@@ -143,8 +155,8 @@ export function getCoreElementInfo(path: NodePath<T.JSXElement>): CoreElementTyp
     const coreElementType = isComponentRoot
         ? CoreElementType.COMPONENT_ROOT
         : isBodyTag
-          ? CoreElementType.BODY_TAG
-          : undefined;
+            ? CoreElementType.BODY_TAG
+            : undefined;
 
     return coreElementType ?? null;
 }

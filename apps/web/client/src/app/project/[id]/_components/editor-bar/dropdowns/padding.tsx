@@ -124,15 +124,15 @@ export const Padding = observer(() => {
 
     return (
         <DropdownMenu open={isOpen} onOpenChange={onOpenChange} modal={false}>
-            <HoverOnlyTooltip content="Padding" side="bottom" className="mt-1" hideArrow disabled={isOpen}>
+            <HoverOnlyTooltip content="Padding" side="bottom">
                 <DropdownMenuTrigger asChild>
                     <ToolbarButton
                         isOpen={isOpen}
-                        className="gap-1 flex items-center min-w-10"
+                        className={`gap-1 flex items-center min-w-9 ${paddingValue ? '!text-foreground-primary [&_*]:!text-foreground-primary' : ''}`}
                     >
                         <PaddingIcon className="h-4 min-h-4 w-4 min-w-4" />
                         {paddingValue && (
-                            <span className="text-small data-[state=open]:text-white">{paddingValue}</span>
+                            <span className="text-small text-foreground-primary">{paddingValue}</span>
                         )}
                     </ToolbarButton>
                 </DropdownMenuTrigger>
@@ -164,6 +164,9 @@ export const Padding = observer(() => {
                         onChange={(value) => handleBoxChange('padding', value.toString())}
                         unit={boxState.padding.unit}
                         onUnitChange={(unit) => handleUnitChange('padding', unit)}
+                        min={0}
+                        max={384}
+                        step={16}
                     />
                 ) : (
                     <SpacingInputs

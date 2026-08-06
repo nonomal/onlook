@@ -1,3 +1,5 @@
+import { NEXT_JS_FILE_EXTENSIONS } from '@onlook/constants';
+import { RouterType } from '@onlook/models';
 import isSubdir from 'is-subdir';
 import path from 'path';
 
@@ -84,3 +86,44 @@ export const isTargetFile = (
     const dirName = normalize(path.dirname(targetFile));
     return potentialPaths.some((p) => normalize(p) === dirName);
 };
+
+export const isRootLayoutFile = (
+    filePath: string,
+    routerType: RouterType = RouterType.APP,
+): boolean => {
+    const potentialPaths =
+        routerType === RouterType.APP ? ['app', 'src/app'] : ['pages', 'src/pages'];
+    return isTargetFile(filePath, {
+        fileName: 'layout',
+        targetExtensions: NEXT_JS_FILE_EXTENSIONS,
+        potentialPaths,
+    });
+};
+
+/**
+ * Compare two file paths for equality, handling different formats robustly
+ * Normalizes both paths before comparison to handle leading slashes, double slashes, etc.
+ * 
+ * Examples:
+ * - pathsEqual('/src/app/page.tsx', 'src/app/page.tsx') => true
+ * - pathsEqual('src//app/page.tsx', 'src/app/page.tsx') => true  
+ * - pathsEqual('./src/app/page.tsx', 'src/app/page.tsx') => true
+ */
+export function pathsEqual(path1: string | undefined | null, path2: string | undefined | null): boolean {
+    if (!path1 || !path2) return false;
+    
+    const normalizeForComparison = (p: string) => {
+        const clean = p.startsWith('/') ? p.substring(1) : p;
+        return path.posix.normalize(clean);
+    };
+    
+    return normalizeForComparison(path1) === normalizeForComparison(path2);
+}
+
+export function pathMatchesAny(targetPath: string, paths: string[]): boolean {
+    return paths.some(p => pathsEqual(targetPath, p));
+}
+
+export function findMatchingPath(targetPath: string, paths: string[]): string | undefined {
+    return paths.find(p => pathsEqual(targetPath, p));
+}

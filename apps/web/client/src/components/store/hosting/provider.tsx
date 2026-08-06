@@ -10,6 +10,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 interface PublishParams {
     projectId: string;
     type: DeploymentType;
+    sandboxId: string;
     buildScript?: string;
     buildFlags?: string;
     envVars?: Record<string, string>;
@@ -76,6 +77,7 @@ export const HostingProvider = ({ children }: HostingProviderProps) => {
 
     // Mutations
     const { mutateAsync: runCreateDeployment } = api.publish.deployment.create.useMutation();
+    const { mutateAsync: runUpdateDeployment } = api.publish.deployment.update.useMutation();
     const { mutateAsync: runDeployment } = api.publish.deployment.run.useMutation();
     const { mutateAsync: runUnpublish } = api.publish.unpublish.useMutation();
     const { mutateAsync: runCancel } = api.publish.deployment.cancel.useMutation();
@@ -115,60 +117,70 @@ export const HostingProvider = ({ children }: HostingProviderProps) => {
     }, [deployments]);
 
     // Publish function
-    const publish = async (params: PublishParams) => {
-        setSubscriptionStates(prev => ({
-            ...prev,
-            [params.type]: true,
-        }));
+    const publish = async (params: PublishParams): Promise<{ success: boolean } | null> => {
+        let deployment: Deployment | null = null;
+        try {
+            setSubscriptionStates(prev => ({
+                ...prev,
+                [params.type]: true,
+            }));
 
-        const deployment = await runCreateDeployment(params);
+            deployment = await runCreateDeployment(params);
+            if (!deployment) {
+                throw new Error('Failed to create deployment');
+            }
 
-        if (!deployment) {
+            toast.success('Deployment created', {
+                description: `Deployment ID: ${deployment.id}`,
+            });
+
+            // Refetch the specific deployment
+            await refetch(params.type);
+            await runDeployment({
+                deploymentId: deployment.id,
+            });
+
+            refetch(params.type);
+            toast.success('Deployment success!');
+
+            return {
+                success: true,
+            };
+        } catch (error) {
+            toast.error('Failed to publish deployment');
+            if (deployment) {
+                await runUpdateDeployment({
+                    id: deployment.id,
+                    status: DeploymentStatus.FAILED,
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                });
+            }
             return {
                 success: false,
             };
         }
-
-        toast.success('Deployment created', {
-            description: `Deployment ID: ${deployment.deploymentId}`,
-        });
-
-        // Refetch the specific deployment
-        await refetch(params.type);
-
-        const res = await runDeployment({
-            deploymentId: deployment.deploymentId,
-        });
-
-        refetch(params.type);
-
-        if (!res.success) {
-            toast.error('Deployment failed', {
-                description: `Deployment ID: ${deployment.deploymentId}`,
-            });
-        } else {
-            toast.success('Deployment success!');
-        }
-
-        return res;
     };
 
     // Unpublish function
     const unpublish = async (projectId: string, type: DeploymentType) => {
-        setSubscriptionStates(prev => ({
-            ...prev,
-            [type]: true,
-        }));
+        try {
+            setSubscriptionStates(prev => ({
+                ...prev,
+                [type]: true,
+            }));
 
-        const response = await runUnpublish({
-            projectId,
-            type,
-        });
+            const response = await runUnpublish({
+                projectId,
+                type,
+            });
 
-        // Refetch the specific deployment
-        await refetch(type);
-
-        return response;
+            // Refetch the specific deployment
+            await refetch(type);
+            return response;
+        } catch (error) {
+            toast.error('Failed to unpublish deployment');
+            return null;
+        }
     };
 
     // Refetch functions

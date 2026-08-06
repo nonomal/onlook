@@ -1,4 +1,5 @@
 export * from './colors';
+export * from './contact';
 export * from './csb';
 export * from './dom';
 export * from './editor';
@@ -9,3 +10,4 @@ export * from './language';
 export * from './links';
 export * from './storage';
 export * from './style';
+export * from './tags';

@@ -1,33 +1,39 @@
-import type { WebSocketSession } from '@codesandbox/sdk';
 import { DefaultSettings } from '@onlook/constants';
-import type { DrizzleDb } from '@onlook/db/src/client';
-import type { Deployment } from '@onlook/db/src/schema/project/deployment';
-import {
-    DeploymentStatus,
-    DeploymentType
-} from '@onlook/models';
+import { type Deployment, type DrizzleDb } from '@onlook/db';
+import { DeploymentStatus, DeploymentType } from '@onlook/models';
 import { TRPCError } from '@trpc/server';
 import { PublishManager } from '../manager';
 import { deployFreestyle } from './deploy';
+import { extractEnvVarsFromSandbox } from './env';
 import { forkBuildSandbox } from './fork';
-import { getProjectUrls, getSandboxId, updateDeployment } from './helpers';
+import { getProjectUrls, updateDeployment } from './helpers';
 
 export async function publish({
     db,
     deployment,
+    sandboxId
 }: {
     db: DrizzleDb;
     deployment: Deployment;
+    sandboxId: string
 }) {
-    const { id: deploymentId, projectId, type, buildScript, buildFlags, envVars, requestedBy: userId } = deployment;
+    const {
+        id: deploymentId,
+        projectId,
+        type,
+        buildScript,
+        buildFlags,
+        envVars,
+        requestedBy: userId,
+    } = deployment;
     try {
         const deploymentUrls = await getProjectUrls(db, projectId, type);
-        const sandboxId = await getSandboxId(db, projectId);
-
-        const updateDeploymentResult1 = await updateDeployment(db, deploymentId, {
+        const updateDeploymentResult1 = await updateDeployment(db, {
+            id: deploymentId,
             status: DeploymentStatus.IN_PROGRESS,
             message: 'Creating build environment...',
             progress: 10,
+            envVars: deployment.envVars ?? {},
         });
         if (!updateDeploymentResult1) {
             throw new TRPCError({
@@ -36,14 +42,20 @@ export async function publish({
             });
         }
 
-        const { session, sandboxId: forkedSandboxId }: { session: WebSocketSession, sandboxId: string } = await forkBuildSandbox(sandboxId, userId, deploymentId);
+        const { provider, sandboxId: forkedSandboxId } = await forkBuildSandbox(
+            sandboxId,
+            userId,
+            deploymentId,
+        );
 
         try {
-            const updateDeploymentResult2 = await updateDeployment(db, deploymentId, {
+            const updateDeploymentResult2 = await updateDeployment(db, {
+                id: deploymentId,
                 status: DeploymentStatus.IN_PROGRESS,
                 message: 'Creating optimized build...',
                 progress: 20,
                 sandboxId: forkedSandboxId,
+                envVars: deployment.envVars ?? {},
             });
             if (!updateDeploymentResult2) {
                 throw new TRPCError({
@@ -52,18 +64,22 @@ export async function publish({
                 });
             }
 
-            const publishManager = new PublishManager(session);
+            const publishManager = new PublishManager(provider);
             const files = await publishManager.publish({
+                deploymentId,
                 skipBadge: type === DeploymentType.CUSTOM,
                 buildScript: buildScript ?? DefaultSettings.COMMANDS.build,
                 buildFlags: buildFlags ?? DefaultSettings.EDITOR_SETTINGS.buildFlags,
-                updateDeployment: (deployment) => updateDeployment(db, deploymentId, deployment),
+                envVars: deployment.envVars ?? {},
+                updateDeployment: (deploymentUpdate) => updateDeployment(db, deploymentUpdate),
             });
 
-            const updateDeploymentResult3 = await updateDeployment(db, deploymentId, {
+            const updateDeploymentResult3 = await updateDeployment(db, {
+                id: deploymentId,
                 status: DeploymentStatus.IN_PROGRESS,
                 message: 'Deploying build...',
                 progress: 80,
+                envVars: deployment.envVars ?? {},
             });
             if (!updateDeploymentResult3) {
                 throw new TRPCError({
@@ -72,19 +88,26 @@ export async function publish({
                 });
             }
 
+            // Note: Prefer user provided env vars over sandbox env vars
+            const sandboxEnvVars = await extractEnvVarsFromSandbox(provider);
+            const mergedEnvVars = { ...sandboxEnvVars, ...(envVars ?? {}) };
+
             await deployFreestyle({
                 files,
                 urls: deploymentUrls,
-                envVars: envVars ?? {},
+                envVars: mergedEnvVars,
             });
         } finally {
-            await session.disconnect();
+            await provider.destroy();
         }
     } catch (error) {
-        updateDeployment(db, deploymentId, {
+        console.error(error);
+        await updateDeployment(db, {
+            id: deploymentId,
             status: DeploymentStatus.FAILED,
             error: error instanceof Error ? error.message : 'Unknown error',
             progress: 100,
+            envVars: deployment.envVars ?? {},
         });
         throw error;
     }

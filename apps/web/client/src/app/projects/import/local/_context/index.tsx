@@ -1,15 +1,19 @@
 'use client';
 
-import { ProcessedFileType, type NextJsProjectValidation, type ProcessedFile } from '@/app/projects/types';
-import { api } from '@/trpc/react';
-import { Routes } from '@/utils/constants';
-import { type SandboxBrowserSession, type WebSocketSession } from '@codesandbox/sdk';
-import { connectToSandbox } from '@codesandbox/sdk/browser';
-import { SandboxTemplates, Templates } from '@onlook/constants';
-import { generate, injectPreloadScript, parse } from '@onlook/parser';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState } from 'react';
+
+import type { Provider } from '@onlook/code-provider';
+import { CodeProvider, createCodeProviderClient } from '@onlook/code-provider';
+import { NEXT_JS_FILE_EXTENSIONS, SandboxTemplates, Templates } from '@onlook/constants';
+import { RouterType } from '@onlook/models';
+import { isTargetFile } from '@onlook/utility';
+
+import type { NextJsProjectValidation, ProcessedFile } from '@/app/projects/types';
+import { ProcessedFileType } from '@/app/projects/types';
+import { api } from '@/trpc/react';
+import { Routes } from '@/utils/constants';
 
 export interface Project {
     name: string;
@@ -40,15 +44,50 @@ interface ProjectCreationContextValue {
 
 const ProjectCreationContext = createContext<ProjectCreationContextValue | undefined>(undefined);
 
+export function detectPortFromPackageJson(packageJsonFile: ProcessedFile | undefined): number {
+    const defaultPort = 3000;
+
+    if (
+        !packageJsonFile ||
+        typeof packageJsonFile.content !== 'string' ||
+        packageJsonFile.type !== ProcessedFileType.TEXT
+    ) {
+        return defaultPort;
+    }
+
+    try {
+        const pkg = JSON.parse(packageJsonFile.content) as Record<string, unknown>;
+        const scripts = pkg.scripts as Record<string, string> | undefined;
+        const devScript = scripts?.dev;
+
+        if (!devScript || typeof devScript !== 'string') {
+            return defaultPort;
+        }
+
+        const portRegex = /(?:PORT=|--port[=\s]|-p\s*?)(\d+)/;
+        const portMatch = portRegex.exec(devScript);
+
+        if (portMatch?.[1]) {
+            const port = parseInt(portMatch[1], 10);
+            if (port > 0 && port <= 65535) {
+                return port;
+            }
+        }
+
+        return defaultPort;
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.warn('Failed to parse package.json for port detection:', errorMessage);
+        return defaultPort;
+    }
+}
+
 interface ProjectCreationProviderProps {
     children: ReactNode;
     totalSteps: number;
 }
 
-export const ProjectCreationProvider = ({
-    children,
-    totalSteps,
-}: ProjectCreationProviderProps) => {
+export const ProjectCreationProvider = ({ children, totalSteps }: ProjectCreationProviderProps) => {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(0);
     const [projectData, setProjectDataState] = useState<Partial<Project>>({
@@ -80,11 +119,15 @@ export const ProjectCreationProvider = ({
                 return;
             }
 
+            const packageJsonFile = projectData.files.find(
+                (f) => f.path.endsWith('package.json') && f.type === ProcessedFileType.TEXT,
+            );
+
             const template = SandboxTemplates[Templates.BLANK];
             const forkedSandbox = await forkSandbox({
                 sandbox: {
                     id: template.id,
-                    port: template.port,
+                    port: detectPortFromPackageJson(packageJsonFile),
                 },
                 config: {
                     title: `Imported project - ${user.id}`,
@@ -92,33 +135,31 @@ export const ProjectCreationProvider = ({
                 },
             });
 
-            const browserSession: SandboxBrowserSession = await startSandbox({
-                sandboxId: forkedSandbox.sandboxId,
-                userId: user.id,
-            });
-
-            const session = await connectToSandbox({
-                session: browserSession,
-                getSession: async (id) => {
-                    return await startSandbox({
-                        sandboxId: id,
+            const provider = await createCodeProviderClient(CodeProvider.CodeSandbox, {
+                providerOptions: {
+                    codesandbox: {
+                        sandboxId: forkedSandbox.sandboxId,
                         userId: user.id,
-                    });
+                        initClient: true,
+                        keepActiveWhileConnected: false,
+                        getSession: async (sandboxId) => {
+                            return startSandbox({ sandboxId });
+                        },
+                    },
                 },
             });
 
-            await uploadToSandbox(projectData.files, session);
-            await session.setup.run();
-            await session.setup.waitUntilComplete();
-            await session.disconnect();
+            await uploadToSandbox(projectData.files, provider);
+            await provider.setup({});
+            await provider.destroy();
 
             const project = await createProject({
                 project: {
                     name: projectData.name ?? 'New project',
-                    sandboxId: forkedSandbox.sandboxId,
-                    sandboxUrl: forkedSandbox.previewUrl,
                     description: 'Your new project',
                 },
+                sandboxId: forkedSandbox.sandboxId,
+                sandboxUrl: forkedSandbox.previewUrl,
                 userId: user.id,
             });
             if (!project) {
@@ -139,37 +180,42 @@ export const ProjectCreationProvider = ({
     const validateNextJsProject = async (
         files: ProcessedFile[],
     ): Promise<NextJsProjectValidation> => {
-        const packageJsonFile = files.find((f) => f.path.endsWith('package.json') && f.type === ProcessedFileType.TEXT);
+        const packageJsonFile = files.find(
+            (f) => f.path.endsWith('package.json') && f.type === ProcessedFileType.TEXT,
+        );
 
-        if (!packageJsonFile) {
-            return { isValid: false, error: 'No package.json found' };
+        if (typeof packageJsonFile?.content !== 'string') {
+            return { isValid: false, error: 'Package.json is not a text file' };
         }
 
         try {
-            const packageJson = JSON.parse(packageJsonFile.content as string);
-            const hasNext = packageJson.dependencies?.next || packageJson.devDependencies?.next;
+            const packageJson = JSON.parse(packageJsonFile.content) as Record<string, unknown>;
+            const dependencies = packageJson.dependencies as Record<string, string> | undefined;
+            const devDependencies = packageJson.devDependencies as
+                | Record<string, string>
+                | undefined;
+            const hasNext = dependencies?.next ?? devDependencies?.next;
             if (!hasNext) {
                 return { isValid: false, error: 'Next.js not found in dependencies' };
             }
 
-            const hasReact = packageJson.dependencies?.react || packageJson.devDependencies?.react;
+            const hasReact = dependencies?.react ?? devDependencies?.react;
             if (!hasReact) {
                 return { isValid: false, error: 'React not found in dependencies' };
             }
 
-            let routerType: 'app' | 'pages' = 'pages';
+            let routerType: RouterType = RouterType.PAGES;
 
-            const hasAppLayout = files.some(
-                (f) =>
-                    (f.path.includes('app/layout.') || f.path.includes('src/app/layout.')) &&
-                    (f.path.endsWith('.tsx') ||
-                        f.path.endsWith('.ts') ||
-                        f.path.endsWith('.jsx') ||
-                        f.path.endsWith('.js')),
+            const hasAppLayout = files.some((f) =>
+                isTargetFile(f.path, {
+                    fileName: 'layout',
+                    targetExtensions: NEXT_JS_FILE_EXTENSIONS,
+                    potentialPaths: ['app', 'src/app'],
+                }),
             );
 
             if (hasAppLayout) {
-                routerType = 'app';
+                routerType = RouterType.APP;
             } else {
                 // Check for Pages Router (pages directory)
                 const hasPagesDir = files.some(
@@ -190,7 +236,6 @@ export const ProjectCreationProvider = ({
         }
     };
 
-
     const nextStep = () => {
         if (currentStep < totalSteps - 2) {
             // -2 because we have 2 final steps
@@ -199,7 +244,7 @@ export const ProjectCreationProvider = ({
         } else {
             // This is the final step, so we should finalize the project
             setCurrentStep((prev) => prev + 1);
-            finalizeProject();
+            void finalizeProject();
         }
     };
 
@@ -224,7 +269,7 @@ export const ProjectCreationProvider = ({
 
     const retry = () => {
         setError(null);
-        finalizeProject();
+        void finalizeProject();
     };
 
     const cancel = () => {
@@ -262,35 +307,25 @@ export const useProjectCreation = (): ProjectCreationContextValue => {
     return context;
 };
 
-export const uploadToSandbox = async (files: ProcessedFile[], session: WebSocketSession) => {
+export const uploadToSandbox = async (files: ProcessedFile[], provider: Provider) => {
     for (const file of files) {
         try {
             if (file.type === ProcessedFileType.BINARY) {
                 const uint8Array = new Uint8Array(file.content);
-                await session.fs.writeFile(file.path, uint8Array, {
-                    overwrite: true,
+                await provider.writeFile({
+                    args: {
+                        path: file.path,
+                        content: uint8Array,
+                        overwrite: true,
+                    },
                 });
             } else {
-                let content = file.content;
-
-                const isLayout = file.path.endsWith('app/layout.tsx') || file.path.endsWith('src/app/layout.tsx');
-                if (isLayout) {
-                    try {
-                        const ast = parse(content, {
-                            sourceType: 'module',
-                            plugins: ['jsx', 'typescript'],
-                        });
-                        const modifiedAst = injectPreloadScript(ast);
-                        content = generate(modifiedAst, {}, content).code;
-                    } catch (parseError) {
-                        console.warn(
-                            'Failed to add script config to layout.tsx:',
-                            parseError,
-                        );
-                    }
-                }
-                await session.fs.writeTextFile(file.path, content, {
-                    overwrite: true,
+                await provider.writeFile({
+                    args: {
+                        path: file.path,
+                        content: file.content,
+                        overwrite: true,
+                    },
                 });
             }
         } catch (fileError) {

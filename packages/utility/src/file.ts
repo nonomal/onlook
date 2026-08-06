@@ -85,6 +85,7 @@ export const getBaseName = (filePath: string): string => {
 export const getMimeType = (fileName: string): string => {
     const lowerCasedFileName = fileName.toLowerCase();
 
+    // Image formats
     if (lowerCasedFileName.endsWith('.ico')) return 'image/x-icon';
     if (lowerCasedFileName.endsWith('.png')) return 'image/png';
     if (lowerCasedFileName.endsWith('.jpg') || lowerCasedFileName.endsWith('.jpeg'))
@@ -93,6 +94,14 @@ export const getMimeType = (fileName: string): string => {
     if (lowerCasedFileName.endsWith('.gif')) return 'image/gif';
     if (lowerCasedFileName.endsWith('.webp')) return 'image/webp';
     if (lowerCasedFileName.endsWith('.bmp')) return 'image/bmp';
+
+    // Video formats
+    if (lowerCasedFileName.endsWith('.mp4')) return 'video/mp4';
+    if (lowerCasedFileName.endsWith('.webm')) return 'video/webm';
+    if (lowerCasedFileName.endsWith('.ogg') || lowerCasedFileName.endsWith('.ogv')) return 'video/ogg';
+    if (lowerCasedFileName.endsWith('.mov')) return 'video/quicktime';
+    if (lowerCasedFileName.endsWith('.avi')) return 'video/x-msvideo';
+
     const res = mime.getType(fileName);
     if (res) return res;
     return 'application/octet-stream';
@@ -103,10 +112,38 @@ export const isImageFile = (fileName: string): boolean => {
     return IMAGE_EXTENSIONS.includes(mimeType);
 };
 
+/**
+ * Check if a file is a video based on its filename or MIME type
+ * @param fileNameOrMimeType - The filename (e.g., "video.mp4") or MIME type (e.g., "video/mp4")
+ * @returns True if the file is a video, false otherwise
+ */
+export const isVideoFile = (fileNameOrMimeType: string): boolean => {
+    // If it looks like a MIME type (starts with 'video/' pattern), check it directly
+    if (fileNameOrMimeType.startsWith('video/') || fileNameOrMimeType.startsWith('audio/') || fileNameOrMimeType.startsWith('image/')) {
+        return fileNameOrMimeType.toLowerCase().startsWith('video/');
+    }
+    // Otherwise, treat it as a filename or file path
+    const mimeType = getMimeType(fileNameOrMimeType);
+    return mimeType.startsWith('video/');
+};
+
 export const convertToBase64 = (content: Uint8Array): string => {
     return btoa(
         Array.from(content)
             .map((byte: number) => String.fromCharCode(byte))
             .join(''),
     );
+};
+
+/**
+ * Convert file content (string or binary) to a base64 data URL
+ * @param content - File content (string for text files, Uint8Array for binary)
+ * @param mimeType - MIME type of the file
+ * @returns Base64 data URL
+ */
+export const convertToBase64DataUrl = (content: string | Uint8Array, mimeType: string): string => {
+    // Convert string to UTF-8 bytes to handle Unicode safely (e.g., emoji, localized text in SVGs)
+    const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
+    const base64 = convertToBase64(bytes);
+    return `data:${mimeType};base64,${base64}`;
 };

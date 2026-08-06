@@ -7,11 +7,13 @@
         "url": "https://github.com/onlook-dev/onlook.git"
     },
     "type": "module",
-    "main": "src/index.ts",
+    "module": "src/index.ts",
+    "main": "dist/index.js",
     "scripts": {
+        "build": "bun build src/index.ts --outfile=dist/index.js",
         "clean": "rm -rf node_modules",
-        "lint": "eslint --fix",
-        "format": "prettier --write .",
+        "lint": "eslint . --max-warnings 0",
+        "format": "eslint --fix .",
         "typecheck": "tsc --noEmit"
     },
     "keywords": [
@@ -29,11 +31,13 @@
         "./*": "./src/*/index.ts"
     },
     "devDependencies": {
+        "@onlook/eslint": "*",
         "@onlook/typescript": "*",
-        "typescript": "^5.5.4",
-        "ai": "^4.2.6"
+        "ai": "5.0.60",
+        "eslint": "^9.0.0",
+        "typescript": "^5.5.4"
     },
     "dependencies": {
-        "zod": "^3.23.8"
+        "zod": "^4.1.3"
     }
 }

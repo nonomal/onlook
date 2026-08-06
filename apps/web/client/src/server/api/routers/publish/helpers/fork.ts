@@ -1,10 +1,12 @@
-import { env } from "@/env";
-import { CodeSandbox, type SandboxBrowserSession } from "@codesandbox/sdk";
+import { CodeProvider, createCodeProviderClient, getStaticCodeProvider, type Provider } from '@onlook/code-provider';
 
-const sdk = new CodeSandbox(env.CSB_API_KEY);
-
-export async function forkBuildSandbox(sandboxId: string, userId: string, deploymentId: string): Promise<SandboxBrowserSession> {
-    const sandbox = await sdk.sandboxes.create({
+export async function forkBuildSandbox(
+    sandboxId: string,
+    userId: string,
+    deploymentId: string,
+): Promise<{ provider: Provider; sandboxId: string }> {
+    const CodesandboxProvider = await getStaticCodeProvider(CodeProvider.CodeSandbox);
+    const project = await CodesandboxProvider.createProject({
         source: 'template',
         id: sandboxId,
         title: 'Deployment Fork of ' + sandboxId,
@@ -12,9 +14,18 @@ export async function forkBuildSandbox(sandboxId: string, userId: string, deploy
         tags: ['deployment', 'preview', userId, deploymentId],
     });
 
-    const session = await sandbox.connect()
+    const forkedProvider = await createCodeProviderClient(CodeProvider.CodeSandbox, {
+        providerOptions: {
+            codesandbox: {
+                sandboxId: project.id,
+                userId,
+                initClient: true,
+            },
+        },
+    });
+
     return {
-        session,
-        sandboxId: sandbox.id,
-    }
+        provider: forkedProvider,
+        sandboxId: project.id,
+    };
 }

@@ -1,14 +1,9 @@
-import type { EditorEngine } from '@/components/store/editor/engine';
-import {
-    EditorTabValue,
-    type Action,
-    type CodeDiffRequest,
-    type DomElement,
-    type FileToRequests,
-} from '@onlook/models';
+import { type Action, type CodeDiffRequest, type FileToRequests } from '@onlook/models';
 import { toast } from '@onlook/ui/sonner';
 import { assertNever } from '@onlook/utility';
 import { makeAutoObservable } from 'mobx';
+
+import { type EditorEngine } from '@/components/store/editor/engine';
 import {
     getEditTextRequests,
     getGroupRequests,
@@ -28,39 +23,12 @@ export class CodeManager {
         makeAutoObservable(this);
     }
 
-    viewSourceFile(fileName: string) {
-        console.log('viewSourceFile', fileName);
-    }
-
-    async viewCodeBlock(oid: string) {
-        try {
-            this.editorEngine.state.rightPanelTab = EditorTabValue.DEV;
-            const element =
-                this.editorEngine.elements.selected.find((el: DomElement) => el.oid === oid) ||
-                this.editorEngine.elements.selected.find((el: DomElement) => el.instanceId === oid);
-
-            if (element) {
-                // First get the file path and load the file
-                const filePath = await this.editorEngine.ide.getFilePathFromOid(element.oid || '');
-                if (filePath) {
-                    // Load the file first
-                    await this.editorEngine.ide.openFile(filePath);
-                    // Then select the element after a small delay to ensure the file is loaded
-                    setTimeout(() => {
-                        this.editorEngine.elements.selected = [element];
-                    }, 500);
-                }
-            }
-        } catch (error) {
-            console.error('Error viewing source:', error);
-        }
-    }
-
     async write(action: Action) {
         try {
             // TODO: This is a hack to write code, we should refactor this
             if (action.type === 'write-code' && action.diffs[0]) {
-                await this.editorEngine.sandbox.writeFile(
+                // Write-code actions don't have branch context, use active editor
+                await this.editorEngine.fileSystem.writeFile(
                     action.diffs[0].path,
                     action.diffs[0].generated,
                 );
@@ -73,7 +41,7 @@ export class CodeManager {
             toast.error('Error writing requests', {
                 description: error instanceof Error ? error.message : 'Unknown error',
             });
-            this.editorEngine.error.addCodeApplicationError(error instanceof Error ? error.message : 'Unknown error', action);
+            this.editorEngine.branches.activeError.addCodeApplicationError(error instanceof Error ? error.message : 'Unknown error', action);
         }
     }
 
@@ -81,7 +49,22 @@ export class CodeManager {
         const groupedRequests = await this.groupRequestByFile(requests);
         const codeDiffs = await processGroupedRequests(groupedRequests);
         for (const diff of codeDiffs) {
-            await this.editorEngine.sandbox.writeFile(diff.path, diff.generated);
+            const fileGroup = groupedRequests.get(diff.path);
+            if (!fileGroup) {
+                throw new Error(`No request group found for file: ${diff.path}`);
+            }
+
+            const firstRequest = Array.from(fileGroup.oidToRequest.values())[0];
+            if (!firstRequest) {
+                throw new Error(`No requests found in group for file: ${diff.path}`);
+            }
+
+            const branchData = this.editorEngine.branches.getBranchDataById(firstRequest.branchId);
+            if (!branchData) {
+                throw new Error(`Branch not found for ID: ${firstRequest.branchId}`);
+            }
+
+            await branchData.codeEditor.writeFile(diff.path, diff.generated);
         }
     }
 
@@ -116,19 +99,22 @@ export class CodeManager {
         const requestByFile: FileToRequests = new Map();
 
         for (const request of requests) {
-            const templateNode = await this.editorEngine.sandbox.getTemplateNode(request.oid);
-            if (!templateNode) {
-                throw new Error(`Template node not found for oid: ${request.oid}`);
+            const branchData = this.editorEngine.branches.getBranchDataById(request.branchId);
+            const codeEditor = branchData?.codeEditor || this.editorEngine.fileSystem;
+
+            const metadata = await codeEditor.getJsxElementMetadata(request.oid);
+            if (!metadata) {
+                throw new Error(`Metadata not found for oid: ${request.oid}`);
             }
-            const file = await this.editorEngine.sandbox.readFile(templateNode.path);
-            if (!file || file.type === 'binary') {
-                throw new Error(`Failed to read file: ${templateNode.path}`);
+            const fileContent = await codeEditor.readFile(metadata.path);
+            if (fileContent instanceof Uint8Array) {
+                throw new Error(`File is binary: ${metadata.path}`);
             }
-            const path = templateNode.path;
+            const path = metadata.path;
 
             let groupedRequest = requestByFile.get(path);
             if (!groupedRequest) {
-                groupedRequest = { oidToRequest: new Map(), content: file.content };
+                groupedRequest = { oidToRequest: new Map(), content: fileContent };
             }
             groupedRequest.oidToRequest.set(request.oid, request);
             requestByFile.set(path, groupedRequest);

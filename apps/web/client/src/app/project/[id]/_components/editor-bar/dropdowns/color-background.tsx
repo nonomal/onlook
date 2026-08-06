@@ -1,8 +1,6 @@
 'use client';
 
 import { useEditorEngine } from '@/components/store/editor';
-import { Button } from '@onlook/ui/button';
-import { ToolbarButton } from '../toolbar-button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@onlook/ui/dropdown-menu';
 import { Icons } from '@onlook/ui/icons';
 import { observer } from 'mobx-react-lite';
@@ -11,6 +9,7 @@ import { useColorUpdate } from '../hooks/use-color-update';
 import { useDropdownControl } from '../hooks/use-dropdown-manager';
 import { HoverOnlyTooltip } from '../hover-tooltip';
 import { ColorPickerContent } from '../inputs/color-picker';
+import { ToolbarButton } from '../toolbar-button';
 import { hasGradient } from '../utils/gradient';
 
 export const ColorBackground = observer(() => {
@@ -52,7 +51,7 @@ export const ColorBackground = observer(() => {
                             className="flex w-10 flex-col items-center justify-center gap-0.5"
                         >
                             <Icons.PaintBucket className="h-2 w-2" />
-                            <div className="h-[4px] w-6 rounded-full" style={previewStyle} />
+                            <div className="h-[4px] w-6 rounded-full border-[0.5px] border-border" style={previewStyle} />
                         </ToolbarButton>
                     </DropdownMenuTrigger>
                 </HoverOnlyTooltip>

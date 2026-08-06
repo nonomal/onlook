@@ -9,10 +9,11 @@ import './src/env';
 
 const nextConfig: NextConfig = {
     devIndicators: false,
-    // TODO: Remove this once we have a proper ESLint and TypeScript config
+    ...(process.env.STANDALONE_BUILD === 'true' && { output: 'standalone' }),
     eslint: {
+        // Don't run ESLint during builds - handle it separately in CI
         ignoreDuringBuilds: true,
-    }
+    },
 };
 
 if (process.env.NODE_ENV === 'development') {

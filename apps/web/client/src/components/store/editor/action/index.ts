@@ -1,4 +1,3 @@
-import { sendAnalytics } from '@/utils/analytics';
 import type { DomElement, LayerNode } from '@onlook/models';
 import { EditorMode } from '@onlook/models';
 import {
@@ -33,9 +32,8 @@ export class ActionManager {
         if (action == null) {
             return;
         }
-        await this.dispatch(action);
         await this.editorEngine.code.write(action);
-        sendAnalytics('undo');
+        this.editorEngine.posthog.capture('undo');
     }
 
     async redo() {
@@ -43,9 +41,8 @@ export class ActionManager {
         if (action == null) {
             return;
         }
-        await this.dispatch(action);
         await this.editorEngine.code.write(action);
-        sendAnalytics('redo');
+        this.editorEngine.posthog.capture('redo');
     }
 
     private async dispatch(action: Action) {
@@ -54,7 +51,8 @@ export class ActionManager {
                 await this.updateStyle(action);
                 break;
             case 'insert-element':
-                await this.insertElement(action);
+                // Disabling real-time insert since this is buggy. Will still work but not as fast.
+                // await this.insertElement(action);
                 break;
             case 'remove-element':
                 await this.removeElement(action);
@@ -287,7 +285,5 @@ export class ActionManager {
         }
     }
 
-    clear() {
-        this.editorEngine.history.clear();
-    }
+    clear() { }
 }

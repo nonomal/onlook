@@ -13,6 +13,9 @@ interface InputRangeProps {
     value: number;
     icon?: keyof typeof Icons;
     unit?: string;
+    min?: number;
+    max?: number;
+    step?: number;
     onChange?: (value: number) => void;
     onUnitChange?: (unit: string) => void;
 }
@@ -21,6 +24,9 @@ export const InputRange = ({
     value,
     icon,
     unit = 'px',
+    min = 0,
+    max = 500,
+    step = 1,
     onChange,
     onUnitChange,
 }: InputRangeProps) => {
@@ -58,9 +64,26 @@ export const InputRange = ({
     const handleBlur = () => {
         const numValue = Number(localValue);
         if (!isNaN(numValue)) {
+            setLocalValue(String(numValue));
             debouncedOnChange(numValue);
         } else {
             setLocalValue(String(value));
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const stepValue = e.shiftKey ? step * 10 : step;
+            const direction = e.key === 'ArrowUp' ? 1 : -1;
+            const currentValue = Number(localValue);
+            if (!isNaN(currentValue)) {
+                const newValue = currentValue + (stepValue * direction);
+                setLocalValue(String(newValue));
+                debouncedOnChange(newValue);
+            }
+        } else if (e.key === 'Enter') {
+            handleBlur();
         }
     };
 
@@ -76,7 +99,7 @@ export const InputRange = ({
         if (isDragging && rangeRef.current) {
             const rect = rangeRef.current.getBoundingClientRect();
             const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            const newValue = Math.round(percentage * 500);
+            const newValue = Math.round((percentage * (max - min) + min) / step) * step;
             setLocalValue(String(newValue));
             debouncedOnChange(newValue);
         }
@@ -94,8 +117,9 @@ export const InputRange = ({
                 <input
                     ref={rangeRef}
                     type="range"
-                    min="0"
-                    max="500"
+                    min={min}
+                    max={max}
+                    step={step}
                     value={Number(localValue)}
                     onChange={(e) => {
                         const newValue = Number(e.target.value);
@@ -113,17 +137,13 @@ export const InputRange = ({
                 <div className="flex items-center bg-background-tertiary/50 justify-between rounded-md px-3 h-[36px]">
                     <input
                         type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
+                        inputMode="decimal"
+                        pattern="[0-9]*\.?[0-9]*"
                         value={localValue}
                         onChange={handleChange}
                         onBlur={handleBlur}
+                        onKeyDown={handleKeyDown}
                         className="min-w-[40px] max-w-[40px] bg-transparent text-sm text-white focus:outline-none uppercase input-range-text"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleBlur();
-                            }
-                        }}
                     />
 
                     <DropdownMenu modal={false}>

@@ -14,8 +14,8 @@
     "scripts": {
         "dev": "email dev --dir ./src/templates --port 4444",
         "clean": "rm -rf node_modules",
-        "lint": "eslint --fix .",
-        "format": "prettier --write .",
+        "lint": "eslint . --max-warnings 0",
+        "format": "eslint --fix .",
         "typecheck": "tsc --noEmit"
     },
     "keywords": [
@@ -30,13 +30,17 @@
     "license": "Apache-2.0",
     "homepage": "https://onlook.com",
     "devDependencies": {
-        "@onlook/typescript": "*"
+        "@onlook/eslint": "*",
+        "@onlook/typescript": "*",
+        "@react-email/preview-server": "4.3.1",
+        "eslint": "^9.0.0",
+        "typescript": "^5.5.4"
     },
     "dependencies": {
-        "@react-email/components": "0.0.41",
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
-        "react-email": "4.0.15",
+        "@react-email/components": "0.5.7",
+        "react": "19.2.0",
+        "react-dom": "19.2.0",
+        "react-email": "4.3.1",
         "resend": "^4.5.1"
     }
 }

@@ -2,14 +2,26 @@
 
 import { EditorEngineProvider } from '@/components/store/editor';
 import { HostingProvider } from '@/components/store/hosting';
-import { ChatProvider } from './_hooks/use-chat';
+import type { Branch, Project } from '@onlook/models';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
-export const ProjectProviders = ({ children, projectId }: { children: React.ReactNode, projectId: string }) => {
+export const ProjectProviders = ({
+    children,
+    project,
+    branches
+}: {
+    children: React.ReactNode,
+    project: Project,
+    branches: Branch[]
+}) => {
     return (
-        <EditorEngineProvider projectId={projectId}>
-            <HostingProvider>
-                <ChatProvider>{children}</ChatProvider>
-            </HostingProvider>
-        </EditorEngineProvider>
+        <DndProvider backend={HTML5Backend}>
+            <EditorEngineProvider project={project} branches={branches}>
+                <HostingProvider>
+                    {children}
+                </HostingProvider>
+            </EditorEngineProvider>
+        </DndProvider>
     );
 };

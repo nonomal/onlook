@@ -12,6 +12,8 @@ import { memo, useEffect, useRef } from 'react';
 interface TerminalProps {
     hidden: boolean;
     terminalSessionId: string;
+    branchId?: string;
+    isActive?: boolean;
 }
 
 const TERMINAL_THEME: Record<'LIGHT' | 'DARK', ITheme> = {
@@ -41,30 +43,41 @@ const TERMINAL_THEME: Record<'LIGHT' | 'DARK', ITheme> = {
     DARK: {}, // Use default dark theme
 };
 
-export const Terminal = memo(observer(({ hidden = false, terminalSessionId }: TerminalProps) => {
+export const Terminal = memo(observer(({ hidden = false, terminalSessionId, branchId, isActive = true }: TerminalProps) => {
     const editorEngine = useEditorEngine();
-    const terminalSession = editorEngine.sandbox.session.getTerminalSession(terminalSessionId);
+
+    // Get terminal session from the appropriate branch's sandbox
+    const terminalSession =
+        branchId
+            ? editorEngine.branches.getSandboxById(branchId)?.session?.getTerminalSession(terminalSessionId)
+            : editorEngine.activeSandbox?.session?.getTerminalSession(terminalSessionId);
     const containerRef = useRef<HTMLDivElement>(null);
     const { theme } = useTheme();
 
     // Mount xterm to DOM
     useEffect(() => {
-        if (!containerRef.current || !terminalSession?.xterm) return;
+        if (hidden || !isActive || !containerRef.current || !terminalSession?.xterm) return;
         // Only open if not already attached
         if (!terminalSession.xterm.element || terminalSession.xterm.element.parentElement !== containerRef.current) {
             terminalSession.xterm.open(containerRef.current);
+            // Ensure proper sizing after opening
+            setTimeout(() => {
+                if (terminalSession?.fitAddon && containerRef.current && !hidden && isActive) {
+                    terminalSession.fitAddon.fit();
+                }
+            }, 100);
         }
         return () => {
             // Detach xterm from DOM on unmount (but do not dispose)
             if (
-                terminalSession.xterm.element &&
+                terminalSession?.xterm?.element &&
                 containerRef.current &&
-                terminalSession.xterm.element.parentElement === containerRef.current
+                terminalSession?.xterm?.element?.parentElement === containerRef.current
             ) {
                 containerRef.current.innerHTML = '';
             }
         };
-    }, [terminalSessionId, terminalSession, containerRef]);
+    }, [terminalSessionId, terminalSession, branchId, hidden, isActive]);
 
     useEffect(() => {
         if (terminalSession?.xterm) {
@@ -73,12 +86,33 @@ export const Terminal = memo(observer(({ hidden = false, terminalSessionId }: Te
     }, [theme, terminalSession]);
 
     useEffect(() => {
-        if (!hidden && terminalSession?.xterm) {
+        if (!hidden && isActive && terminalSession?.xterm) {
             setTimeout(() => {
                 terminalSession.xterm?.focus();
+                // Fit terminal when it becomes visible
+                if (terminalSession.fitAddon) {
+                    terminalSession.fitAddon.fit();
+                }
             }, 100);
         }
-    }, [hidden, terminalSession]);
+    }, [hidden, isActive, terminalSession]);
+
+    // Handle container resize
+    useEffect(() => {
+        if (!containerRef.current || !terminalSession?.fitAddon || hidden || !isActive) return;
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (!hidden && isActive) {
+                terminalSession.fitAddon?.fit();
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [terminalSession, hidden, isActive]);
 
     return (
         <div

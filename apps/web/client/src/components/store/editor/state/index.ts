@@ -1,7 +1,9 @@
 import {
+    type BranchTabValue,
     type BrandTabValue,
+    ChatType,
     EditorMode,
-    EditorTabValue,
+    InsertMode,
     type LeftPanelTabValue
 } from '@onlook/models';
 import { debounce } from 'lodash';
@@ -13,11 +15,16 @@ export class StateManager {
     publishOpen = false;
     leftPanelLocked = false;
     canvasPanning = false;
+    isDragSelecting = false;
 
     editorMode: EditorMode = EditorMode.DESIGN;
+    insertMode: InsertMode | null = null;
     leftPanelTab: LeftPanelTabValue | null = null;
-    rightPanelTab: EditorTabValue = EditorTabValue.CHAT;
     brandTab: BrandTabValue | null = null;
+    branchTab: BranchTabValue | null = null;
+    manageBranchId: string | null = null;
+
+    chatMode: ChatType = ChatType.EDIT;
 
     constructor() {
         makeAutoObservable(this);
@@ -43,6 +50,8 @@ export class StateManager {
     clear() {
         this.hotkeysOpen = false;
         this.publishOpen = false;
+        this.branchTab = null;
+        this.manageBranchId = null;
         this.resetCanvasScrollingDebounced.cancel();
     }
 }

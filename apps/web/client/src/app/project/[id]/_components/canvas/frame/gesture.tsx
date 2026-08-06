@@ -1,20 +1,19 @@
 import { useEditorEngine } from '@/components/store/editor';
 import type { FrameData } from '@/components/store/editor/frames';
 import { getRelativeMousePositionToFrameView } from '@/components/store/editor/overlay/utils';
-import type { DomElement, ElementPosition, WebFrame } from '@onlook/models';
-import { EditorMode, MouseAction } from '@onlook/models';
+import type { DomElement, ElementPosition, Frame } from '@onlook/models';
+import { EditorMode, InsertMode, MouseAction } from '@onlook/models';
 import { toast } from '@onlook/ui/sonner';
 import { cn } from '@onlook/ui/utils';
 import throttle from 'lodash/throttle';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo } from 'react';
-import { RightClickMenu } from './right-click';
+import { RightClickMenu } from '../../right-click-menu';
 
-export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
+export const GestureScreen = observer(({ frame, isResizing }: { frame: Frame, isResizing: boolean }) => {
     const editorEngine = useEditorEngine();
-    const isResizing = false;
 
-    const getFrameData: () => FrameData | undefined = useCallback(() => {
+    const getFrameData: () => FrameData | null = useCallback(() => {
         return editorEngine.frames.get(frame.id);
     }, [editorEngine.frames, frame.id]);
 
@@ -53,7 +52,7 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
                     case MouseAction.MOVE:
                         editorEngine.elements.mouseover(el);
                         if (e.altKey) {
-                            if (editorEngine.state.editorMode !== EditorMode.INSERT_IMAGE) {
+                            if (editorEngine.state.insertMode !== InsertMode.INSERT_IMAGE) {
                                 editorEngine.overlay.showMeasurement();
                             }
                         } else {
@@ -62,7 +61,7 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
                         break;
                     case MouseAction.MOUSE_DOWN:
                         if (el.tagName.toLocaleLowerCase() === 'body') {
-                            editorEngine.frames.select([frame]);
+                            editorEngine.frames.select([frame], e.shiftKey);
                             return;
                         }
                         // Ignore right-clicks
@@ -76,11 +75,15 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
                             editorEngine.elements.shiftClick(el);
                         } else {
                             editorEngine.elements.click([el]);
-                            await editorEngine.move.start(el, pos, frameData);
                         }
                         break;
                     case MouseAction.DOUBLE_CLICK:
-                        editorEngine.text.start(el, frameData.view);
+                        if (el.oid) {
+                            editorEngine.ide.openCodeBlock(el.oid);
+                        } else {
+                            toast.error('Cannot find element in code panel');
+                            return;
+                        }
                         break;
                 }
             } catch (error) {
@@ -91,26 +94,26 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
         [getRelativeMousePosition, editorEngine],
     );
 
-    const throttledMouseMove = useMemo(
-        () =>
-            throttle(async (e: React.MouseEvent<HTMLDivElement>) => {
-                // await handleMouseEvent(e, MouseAction.MOVE);
-
-                if (editorEngine.move.isDragging) {
-                    await editorEngine.move.drag(e, getRelativeMousePosition);
-                } else if (
-                    editorEngine.state.editorMode === EditorMode.DESIGN ||
-                    ((editorEngine.state.editorMode === EditorMode.INSERT_DIV ||
-                        editorEngine.state.editorMode === EditorMode.INSERT_TEXT ||
-                        editorEngine.state.editorMode === EditorMode.INSERT_IMAGE) &&
-                        !editorEngine.insert.isDrawing)
-                ) {
-                    await handleMouseEvent(e, MouseAction.MOVE);
-                } else if (editorEngine.insert.isDrawing) {
-                    editorEngine.insert.draw(e);
-                }
-            }, 16),
-        [editorEngine, getRelativeMousePosition, handleMouseEvent],
+    const throttledMouseMove = useMemo(() =>
+        throttle(async (e: React.MouseEvent<HTMLDivElement>) => {
+            // Skip hover events during drag selection
+            if (editorEngine.state.isDragSelecting) {
+                return;
+            }
+            if (
+                editorEngine.state.editorMode === EditorMode.DESIGN ||
+                editorEngine.state.editorMode === EditorMode.CODE ||
+                ((editorEngine.state.insertMode === InsertMode.INSERT_DIV ||
+                    editorEngine.state.insertMode === InsertMode.INSERT_TEXT ||
+                    editorEngine.state.insertMode === InsertMode.INSERT_IMAGE) &&
+                    !editorEngine.insert.isDrawing)
+            ) {
+                await handleMouseEvent(e, MouseAction.MOVE);
+            } else if (editorEngine.insert.isDrawing) {
+                editorEngine.insert.draw(e);
+            }
+        }, 16),
+        [editorEngine.state.isDragSelecting, editorEngine.state.editorMode, editorEngine.insert.isDrawing, getRelativeMousePosition, handleMouseEvent],
     );
 
     useEffect(() => {
@@ -121,26 +124,25 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
 
     const handleClick = useCallback(
         (e: React.MouseEvent<HTMLDivElement>) => {
-            editorEngine.frames.deselectAll();
             editorEngine.frames.select([frame]);
         },
         [editorEngine.frames],
     );
 
     async function handleDoubleClick(e: React.MouseEvent<HTMLDivElement>) {
-        if (editorEngine.state.editorMode !== EditorMode.DESIGN) {
+        if (editorEngine.state.editorMode === EditorMode.PREVIEW) {
             return;
         }
         await handleMouseEvent(e, MouseAction.DOUBLE_CLICK);
     }
 
     async function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
-        if (editorEngine.state.editorMode === EditorMode.DESIGN) {
+        if (editorEngine.state.editorMode === EditorMode.DESIGN || editorEngine.state.editorMode === EditorMode.CODE) {
             await handleMouseEvent(e, MouseAction.MOUSE_DOWN);
         } else if (
-            editorEngine.state.editorMode === EditorMode.INSERT_DIV ||
-            editorEngine.state.editorMode === EditorMode.INSERT_TEXT ||
-            editorEngine.state.editorMode === EditorMode.INSERT_IMAGE
+            editorEngine.state.insertMode === InsertMode.INSERT_DIV ||
+            editorEngine.state.insertMode === InsertMode.INSERT_TEXT ||
+            editorEngine.state.insertMode === InsertMode.INSERT_IMAGE
         ) {
             editorEngine.insert.start(e);
         }
@@ -153,9 +155,6 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
         }
 
         await editorEngine.insert.end(e, frameData.view);
-        if (editorEngine.move.isDragging) {
-            await editorEngine.move.end(e);
-        }
     }
 
     const handleDragOver = async (e: React.DragEvent<HTMLDivElement>) => {
@@ -193,6 +192,7 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
             }
 
             editorEngine.state.editorMode = EditorMode.DESIGN;
+            editorEngine.state.insertMode = null;
         } catch (error) {
             console.error('drop operation failed:', error);
             toast.error('Failed to drop element', {
@@ -207,8 +207,8 @@ export const GestureScreen = observer(({ frame }: { frame: WebFrame }) => {
             editorEngine.state.editorMode === EditorMode.PREVIEW && !isResizing
                 ? 'hidden'
                 : 'visible',
-            editorEngine.state.editorMode === EditorMode.INSERT_DIV && 'cursor-crosshair',
-            editorEngine.state.editorMode === EditorMode.INSERT_TEXT && 'cursor-text',
+            editorEngine.state.insertMode === InsertMode.INSERT_DIV && 'cursor-crosshair',
+            editorEngine.state.insertMode === InsertMode.INSERT_TEXT && 'cursor-text',
         );
     }, [editorEngine.state.editorMode, isResizing]);
 

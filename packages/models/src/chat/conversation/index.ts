@@ -1,7 +1,16 @@
-export type ChatConversation = {
+import type { ChatSuggestion } from '../suggestion';
+
+export enum AgentType {
+    ROOT = "root",
+    USER = "user",
+}
+
+export interface ChatConversation {
     id: string;
+    agentType: AgentType;
+    title: string | null;
     projectId: string;
-    displayName: string | null;
-    createdAt: string;
-    updatedAt: string;
-};
+    createdAt: Date;
+    updatedAt: Date;
+    suggestions: ChatSuggestion[];
+}

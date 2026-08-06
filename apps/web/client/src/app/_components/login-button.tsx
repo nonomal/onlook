@@ -4,31 +4,61 @@ import { Button } from '@onlook/ui/button';
 import { Icons } from '@onlook/ui/icons';
 import { cn } from '@onlook/ui/utils';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { useAuthContext } from '../auth/auth-context';
 
-export const GithubLoginButton = ({
-    className,
-}: {
+interface LoginButtonProps {
     className?: string;
-}) => {
+    returnUrl?: string | null;
+    method: SignInMethod.GITHUB | SignInMethod.GOOGLE;
+    icon: React.ReactNode;
+    translationKey: keyof typeof transKeys.welcome.login;
+    providerName: string;
+}
+
+export const LoginButton = ({
+    className,
+    returnUrl,
+    method,
+    icon,
+    translationKey,
+    providerName,
+}: LoginButtonProps) => {
     const t = useTranslations();
-    const { lastSignInMethod, handleLogin, isPending } = useAuthContext();
-    const isLastSignInMethod = lastSignInMethod === SignInMethod.GITHUB;
+    const { lastSignInMethod, handleLogin, signingInMethod } = useAuthContext();
+    const isLastSignInMethod = lastSignInMethod === method;
+    const isSigningIn = signingInMethod === method;
+
+    const handleLoginClick = async () => {
+        try {
+            await handleLogin(method, returnUrl ?? null);
+        } catch (error) {
+            console.error(`Error signing in with ${providerName}:`, error);
+            toast.error(`Error signing in with ${providerName}`, {
+                description: error instanceof Error ? error.message : 'Please try again.',
+            });
+        }
+    };
 
     return (
         <div className={cn('flex flex-col items-center w-full', className)}>
             <Button
                 variant="outline"
-                className={`w-full items-center justify-center text-active text-small ${isLastSignInMethod ? 'bg-teal-100 dark:bg-teal-950 border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-100 text-small hover:bg-teal-200/50 dark:hover:bg-teal-800 hover:border-teal-500/70 dark:hover:border-teal-500' : 'bg-background-onlook'}`}
-                onClick={() => handleLogin(SignInMethod.GITHUB)}
-                disabled={isPending}
+                className={cn(
+                    'w-full items-center justify-center text-active text-small',
+                    isLastSignInMethod
+                        ? 'bg-teal-100 dark:bg-teal-950 border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-100 text-small hover:bg-teal-200/50 dark:hover:bg-teal-800 hover:border-teal-500/70 dark:hover:border-teal-500'
+                        : 'bg-background-onlook',
+                )}
+                onClick={handleLoginClick}
+                disabled={!!signingInMethod}
             >
-                {isPending ? (
+                {isSigningIn ? (
                     <Icons.LoadingSpinner className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                    <Icons.GitHubLogo className="w-4 h-4 mr-2" />
+                    icon
                 )}
-                {t(transKeys.welcome.login.github)}
+{t(transKeys.welcome.login[translationKey])}
             </Button>
             {isLastSignInMethod && (
                 <p className="text-teal-500 text-small mt-1">{t(transKeys.welcome.login.lastUsed)}</p>
@@ -37,33 +67,28 @@ export const GithubLoginButton = ({
     );
 };
 
-export const GoogleLoginButton = ({
+
+export const DevLoginButton = ({
     className,
+    returnUrl,
 }: {
     className?: string;
+    returnUrl: string | null;
 }) => {
     const t = useTranslations();
-    const { lastSignInMethod, handleLogin, isPending } = useAuthContext();
-    const isLastSignInMethod = lastSignInMethod === SignInMethod.GOOGLE;
+    const { handleDevLogin, signingInMethod } = useAuthContext();
+    const isSigningIn = signingInMethod === SignInMethod.DEV;
 
     return (
-        <div className={cn('flex flex-col items-center w-full', className)}>
-            <Button
-                variant="outline"
-                className={`w-full items-center justify-center text-active text-small ${isLastSignInMethod ? 'bg-teal-100 dark:bg-teal-950 border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-100 text-small hover:bg-teal-200/50 dark:hover:bg-teal-800 hover:border-teal-500/70 dark:hover:border-teal-500' : 'bg-background-onlook'}`}
-                onClick={() => handleLogin(SignInMethod.GOOGLE)}
-                disabled={isPending}
-            >
-                {isPending ? (
-                    <Icons.LoadingSpinner className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                    <Icons.GoogleLogo viewBox="0 0 24 24" className="w-4 h-4 mr-2" />
-                )}
-                {t(transKeys.welcome.login.google)}
-            </Button>
-            {isLastSignInMethod && (
-                <p className="text-teal-500 text-small mt-1">{t(transKeys.welcome.login.lastUsed)}</p>
-            )}
-        </div>
-    );
-};
+        <Button
+            variant="outline"
+            className="w-full text-active text-small"
+            onClick={() => handleDevLogin(returnUrl)}
+            disabled={!!signingInMethod}
+        >
+            {isSigningIn ? (
+                <Icons.LoadingSpinner className="w-4 h-4 mr-2 animate-spin" />
+            ) : 'DEV MODE: Sign in as demo user'}
+        </Button>
+    )
+}

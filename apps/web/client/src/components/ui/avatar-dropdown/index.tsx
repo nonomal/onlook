@@ -4,41 +4,50 @@ import { useStateManager } from '@/components/store/state';
 import { api } from '@/trpc/react';
 import { Routes } from '@/utils/constants';
 import { createClient } from '@/utils/supabase/client';
-import { Links } from '@onlook/constants';
+import { openFeedbackWidget, resetTelemetry } from '@/utils/telemetry';
+import { getReturnUrlQueryParam } from '@/utils/url';
 import { Avatar, AvatarFallback, AvatarImage } from '@onlook/ui/avatar';
-import { Button } from '@onlook/ui/button';
-import { Icons } from '@onlook/ui/icons';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@onlook/ui/popover';
-import { Separator } from '@onlook/ui/separator';
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@onlook/ui/dropdown-menu';
+import { Icons } from '@onlook/ui/icons';
 import { getInitials } from '@onlook/utility';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { UsageSection } from './plans';
+import { SettingsTabValue } from '../settings-modal/helpers';
 
 export const CurrentUserAvatar = ({ className }: { className?: string }) => {
     const stateManager = useStateManager();
     const supabase = createClient();
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
 
     const { data: user } = api.user.get.useQuery();
     const initials = getInitials(user?.displayName ?? user?.firstName ?? '');
     const [open, setOpen] = useState(false);
 
     const handleSignOut = async () => {
+        // Clear analytics/feedback identities before signing out
+        void resetTelemetry();
         await supabase.auth.signOut();
-        router.push(Routes.LOGIN);
+        const returnUrl = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+        router.push(`${Routes.LOGIN}?${getReturnUrlQueryParam(returnUrl)}`);
     };
 
     const handleOpenSubscription = () => {
-        stateManager.isSubscriptionModalOpen = true;
+        stateManager.settingsTab = SettingsTabValue.SUBSCRIPTION;
+        stateManager.isSettingsModalOpen = true;
         setOpen(false);
     };
 
     const handleOpenSettings = () => {
+        stateManager.settingsTab = SettingsTabValue.PREFERENCES;
         stateManager.isSettingsModalOpen = true;
         setOpen(false);
     };
@@ -55,9 +64,12 @@ export const CurrentUserAvatar = ({ className }: { className?: string }) => {
             onClick: handleOpenSettings,
         },
         {
-            label: 'Report Issue',
-            icon: Icons.ExclamationTriangle,
-            onClick: () => window.open(Links.OPEN_ISSUE, '_blank'),
+            label: 'Send Feedback',
+            icon: Icons.MessageSquare,
+            onClick: () => {
+                void openFeedbackWidget();
+                setOpen(false);
+            },
         },
         {
             label: 'Sign Out',
@@ -67,39 +79,43 @@ export const CurrentUserAvatar = ({ className }: { className?: string }) => {
     ];
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+            <DropdownMenuTrigger asChild>
                 <button>
                     <Avatar className={className}>
                         {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={initials} />}
                         <AvatarFallback>{initials}</AvatarFallback>
                     </Avatar>
                 </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-0">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-72 p-0">
                 <div className="flex items-center gap-2 p-3 select-none">
                     <div className="flex flex-col">
                         <span className="text-smallPlus">{user?.firstName ?? user?.displayName}</span>
                         <span className="text-mini text-foreground-secondary">{user?.email}</span>
                     </div>
                 </div>
-                <Separator />
-                <UsageSection />
-                <Separator />
-                <div className="p-2 flex flex-col items-start">
-                    {BUTTONS.map((button) => (
-                        <Button
-                            key={button.label}
-                            variant="ghost"
-                            className="flex w-full justify-start items-start rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                            onClick={button.onClick}
-                        >
-                            <button.icon className="mr-2 h-4 w-4" />
-                            <span className="text-sm">{button.label}</span>
-                        </Button>
-                    ))}
+                <DropdownMenuSeparator />
+                <UsageSection open={open} />
+                <DropdownMenuSeparator />
+                <div className="p-2">
+                    {BUTTONS.map((button) => {
+                        const IconComponent = button.icon;
+                        return (
+                            <DropdownMenuItem
+                                key={button.label}
+                                className="cursor-pointer"
+                                onClick={button.onClick}
+                            >
+                                <div className="flex flex-row center items-center group">
+                                    <IconComponent className="mr-2" />
+                                    {button.label}
+                                </div>
+                            </DropdownMenuItem>
+                        );
+                    })}
                 </div>
-            </PopoverContent>
-        </Popover>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 };

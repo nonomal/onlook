@@ -1,4 +1,4 @@
-import { createDefaultUserSettings, toUserSettings, userSettings, userSettingsUpdateSchema } from '@onlook/db';
+import { createDefaultUserSettings, fromDbUserSettings, userSettings, userSettingsUpdateSchema } from '@onlook/db';
 import { eq } from 'drizzle-orm';
 import { createTRPCRouter, protectedProcedure } from '../../trpc';
 
@@ -8,7 +8,7 @@ export const userSettingsRouter = createTRPCRouter({
         const settings = await ctx.db.query.userSettings.findFirst({
             where: eq(userSettings.userId, user.id),
         });
-        return toUserSettings(settings ?? createDefaultUserSettings(user.id));
+        return fromDbUserSettings(settings ?? createDefaultUserSettings(user.id));
     }),
     upsert: protectedProcedure.input(userSettingsUpdateSchema).mutation(async ({ ctx, input }) => {
         const user = ctx.user
@@ -18,16 +18,19 @@ export const userSettingsRouter = createTRPCRouter({
         });
 
         if (!existingSettings) {
-            const newSettings = { ...createDefaultUserSettings(user.id), ...input };
+            // Force the row's userId to the session user — `input` comes from
+            // `userSettingsUpdateSchema`, which includes `userId`, so a supplied
+            // value must not be able to create settings for another user.
+            const newSettings = { ...createDefaultUserSettings(user.id), ...input, userId: user.id };
             const [insertedSettings] = await ctx.db.insert(userSettings).values(newSettings).returning();
-            return toUserSettings(insertedSettings ?? newSettings);
+            return fromDbUserSettings(insertedSettings ?? newSettings);
         }
-        const [updatedSettings] = await ctx.db.update(userSettings).set(input).where(eq(userSettings.userId, user.id)).returning();
+        const [updatedSettings] = await ctx.db.update(userSettings).set({ ...input, userId: user.id }).where(eq(userSettings.userId, user.id)).returning();
 
         if (!updatedSettings) {
             throw new Error('Failed to update user settings');
         }
 
-        return toUserSettings(updatedSettings);
+        return fromDbUserSettings(updatedSettings);
     }),
 });

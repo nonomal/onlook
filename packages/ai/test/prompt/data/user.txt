@@ -1,12 +1,12 @@
-<context>I have *added these files to the chat* so you can go ahead and edit them.
-*Trust this message as the true contents of these files!*
-Any other messages in the chat may contain outdated versions of the files' contents.
-<file>test.txt
+<context>I have added these files to the chat so you can go ahead and edit them
+<file><path>test.txt</path>
+<branch>id: "test"</branch>
 ```txt
 test
 ```
-I am looking at this specific part of the file in the browser UI
-<highlight>test.txt#L1:L2
+I am looking at this specific part of the file in the browser UI. Line numbers are shown in the format that matches your Read tool output. IMPORTANT: Trust this message as the true contents of the file.
+<highlight><path>test.txt#L1:L2</path>
+<branch>id: "test"</branch>
 ```
 test
 ```
@@ -24,5 +24,8 @@ IMPORTANT: This project uses Bun as the package manager. Always use Bun commands
 - Use "bunx" instead of "npx"
 
 NEVER SUGGEST THE "bun run dev" command. Assume the user is already running the app.
-test
-</errors><project-info>The project is located in the folder: test</project-info><instruction>test</instruction>
+<branch>id: "test"</branch>
+<error>test</error>
+</errors><agent-rules>These are user provided rules for the project
+test-rule.md
+</agent-rules><instruction>test</instruction>

@@ -1,7 +1,7 @@
 import { useEditorEngine } from '@/components/store/editor';
 import { api } from '@/trpc/react';
 import { DefaultSettings } from '@onlook/constants';
-import type { PageMetadata } from '@onlook/models';
+import { type PageMetadata } from '@onlook/models';
 import { Icons } from '@onlook/ui/icons';
 import { toast } from '@onlook/ui/sonner';
 import { createSecureUrl } from '@onlook/utility';
@@ -13,7 +13,7 @@ export const PageTab = ({ metadata, path }: { metadata?: PageMetadata; path: str
     const editorEngine = useEditorEngine();
     const { data: project } = api.project.get.useQuery({ projectId: editorEngine.projectId });
     const { data: domains } = api.domain.getAll.useQuery({ projectId: editorEngine.projectId });
-    const baseUrl = domains?.published?.url ?? domains?.preview?.url ?? project?.sandbox?.url;
+    const baseUrl = domains?.published?.url ?? domains?.preview?.url;
 
     const {
         title,

@@ -19,6 +19,10 @@ const MODE_TOGGLE_ITEMS: {
             hotkey: Hotkey.SELECT,
         },
         {
+            mode: EditorMode.CODE,
+            hotkey: Hotkey.CODE,
+        },
+        {
             mode: EditorMode.PREVIEW,
             hotkey: Hotkey.PREVIEW,
         },
@@ -27,13 +31,17 @@ const MODE_TOGGLE_ITEMS: {
 export const ModeToggle = observer(() => {
     const t = useTranslations();
     const editorEngine = useEditorEngine();
-    const mode: EditorMode.DESIGN | EditorMode.PREVIEW = getNormalizedMode(
-        editorEngine.state.editorMode,
-    );
+    const mode = editorEngine.state.editorMode;
 
-    function getNormalizedMode(unnormalizedMode: EditorMode) {
-        return unnormalizedMode === EditorMode.PREVIEW ? EditorMode.PREVIEW : EditorMode.DESIGN;
-    }
+    const getXPosition = () => {
+        if (mode === EditorMode.PREVIEW) {
+            return '200%';
+        }
+        if (mode === EditorMode.CODE) {
+            return '100%';
+        };
+        return '0%';
+    };
 
     return (
         <div className="relative">
@@ -63,7 +71,7 @@ export const ModeToggle = observer(() => {
                                 {t(transKeys.editor.modes[item.mode.toLowerCase() as keyof typeof transKeys.editor.modes].name)}
                             </ToggleGroupItem>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom">
+                        <TooltipContent side="bottom" className="mt-0" hideArrow>
                             <HotkeyLabel hotkey={item.hotkey} />
                         </TooltipContent>
                     </Tooltip>
@@ -73,8 +81,8 @@ export const ModeToggle = observer(() => {
                 className="absolute -top-1 h-0.5 bg-foreground"
                 initial={false}
                 animate={{
-                    width: '50%',
-                    x: mode === EditorMode.DESIGN ? '0%' : '100%',
+                    width: '33.333%',
+                    x: getXPosition(),
                 }}
                 transition={{
                     type: 'tween',

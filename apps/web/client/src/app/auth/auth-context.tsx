@@ -1,5 +1,6 @@
 'use client';
 
+import { LocalForageKeys } from '@/utils/constants';
 import { SignInMethod } from '@onlook/models/auth';
 import localforage from 'localforage';
 import type { ReactNode } from 'react';
@@ -9,46 +10,61 @@ import { devLogin, login } from '../login/actions';
 const LAST_SIGN_IN_METHOD_KEY = 'lastSignInMethod';
 
 interface AuthContextType {
-    isPending: boolean;
+    signingInMethod: SignInMethod | null;
     lastSignInMethod: SignInMethod | null;
     isAuthModalOpen: boolean;
     setIsAuthModalOpen: (open: boolean) => void;
-    handleLogin: (method: SignInMethod) => void;
-    handleDevLogin: () => void;
+    handleLogin: (method: SignInMethod.GITHUB | SignInMethod.GOOGLE, returnUrl: string | null) => Promise<void>;
+    handleDevLogin: (returnUrl: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [lastSignInMethod, setLastSignInMethod] = useState<SignInMethod | null>(null);
-    const [isPending, setIsPending] = useState(false);
+    const [signingInMethod, setSigningInMethod] = useState<SignInMethod | null>(null);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
     useEffect(() => {
-        localforage.getItem(LAST_SIGN_IN_METHOD_KEY).then((lastSignInMethod: unknown) => {
-            setLastSignInMethod(lastSignInMethod as SignInMethod | null);
-        });
+        const getLastSignInMethod = async () => {
+            const lastSignInMethod = await localforage.getItem<SignInMethod | null>(LAST_SIGN_IN_METHOD_KEY);
+            setLastSignInMethod(lastSignInMethod);
+        };
+        getLastSignInMethod();
     }, []);
 
-    const handleLogin = async (method: SignInMethod) => {
-        setIsPending(true);
-        await login(method);
-
-        localforage.setItem(LAST_SIGN_IN_METHOD_KEY, method);
-        setTimeout(() => {
-            setIsPending(false);
-        }, 5000);
+    const handleLogin = async (method: SignInMethod.GITHUB | SignInMethod.GOOGLE, returnUrl: string | null) => {
+        try {
+            setSigningInMethod(method);
+            if (returnUrl) {
+                await localforage.setItem(LocalForageKeys.RETURN_URL, returnUrl);
+            }
+            await localforage.setItem(LAST_SIGN_IN_METHOD_KEY, method);
+            await login(method);
+        } catch (error) {
+            console.error('Error signing in with method:', method, error);
+            throw error;
+        } finally {
+            setSigningInMethod(null);
+        }
     };
 
-    const handleDevLogin = async () => {
-        setIsPending(true);
-        await devLogin();
-        setTimeout(() => {
-            setIsPending(false);
-        }, 5000);
+    const handleDevLogin = async (returnUrl: string | null) => {
+        try {
+            setSigningInMethod(SignInMethod.DEV);
+            if (returnUrl) {
+                await localforage.setItem(LocalForageKeys.RETURN_URL, returnUrl);
+            }
+            await devLogin();
+        } catch (error) {
+            console.error('Error signing in with password:', error);
+        } finally {
+            setSigningInMethod(null);
+        }
     }
 
     return (
-        <AuthContext.Provider value={{ isPending, lastSignInMethod, handleLogin, handleDevLogin, isAuthModalOpen, setIsAuthModalOpen }}>
+        <AuthContext.Provider value={{ signingInMethod, lastSignInMethod, handleLogin, handleDevLogin, isAuthModalOpen, setIsAuthModalOpen }}>
             {children}
         </AuthContext.Provider>
     );

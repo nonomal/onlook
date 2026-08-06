@@ -1,34 +1,19 @@
-import type { Message } from '@ai-sdk/react';
-import type { TextPart } from 'ai';
-import type { CodeDiff } from '../../code/index.ts';
-import { type ChatMessageContext } from './context.ts';
+import type { ChatTools } from '@onlook/ai';
+import type { FinishReason, JSONValue, LanguageModelUsage, UIMessage, UIMessagePart } from 'ai';
+import type { MessageCheckpoints } from './checkpoint';
+import type { MessageContext } from './context';
 
-export enum ChatMessageRole {
-    USER = 'user',
-    ASSISTANT = 'assistant',
-    SYSTEM = 'system',
-}
+export type ChatMetadata = {
+    createdAt: Date;
+    conversationId: string;
+    context: MessageContext[];
+    checkpoints: MessageCheckpoints[];
+    finishReason?: FinishReason;
+    usage?: LanguageModelUsage;
+    error?: string;
+};
 
-export interface UserChatMessage extends Message {
-    role: ChatMessageRole.USER;
-    context: ChatMessageContext[];
-    parts: TextPart[];
-    content: string;
-    commitOid: string | null;
-}
-
-export interface AssistantChatMessage extends Message {
-    role: ChatMessageRole.ASSISTANT;
-    applied: boolean;
-    snapshots: ChatSnapshot;
-    parts: Message['parts'];
-    content: string;
-}
-
-export type ChatSnapshot = Record<string, CodeDiff>;
-
-export interface SystemChatMessage extends Message {
-    role: ChatMessageRole.SYSTEM;
-}
-
-export type ChatMessage = UserChatMessage | AssistantChatMessage | SystemChatMessage;
+export type ChatProviderMetadata = Record<string, Record<string, JSONValue>>;
+export type ChatDataPart = {};
+export type ChatMessagePart = UIMessagePart<ChatDataPart, ChatTools>;
+export type ChatMessage = UIMessage<ChatMetadata, ChatDataPart, ChatTools>;

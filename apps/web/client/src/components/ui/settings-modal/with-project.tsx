@@ -1,22 +1,48 @@
 import { useEditorEngine } from '@/components/store/editor';
 import { useStateManager } from '@/components/store/state';
+import type { PageNode } from '@onlook/models';
 import { Button } from '@onlook/ui/button';
 import { Icons } from '@onlook/ui/icons';
 import { Separator } from '@onlook/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@onlook/ui/tooltip';
 import { cn } from '@onlook/ui/utils';
 import { capitalizeFirstLetter } from '@onlook/utility';
-import { AnimatePresence, motion } from 'framer-motion';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useMemo } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DomainTab from './domain';
 import { SettingsTabValue, type SettingTab } from './helpers';
 import { PreferencesTab } from './preferences-tab';
 import { ProjectTab } from './project';
 import { SiteTab } from './site';
-import { VersionsTab } from './versions';
 import { PageTab } from './site/page';
-import type { PageNode } from '@onlook/models';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@onlook/ui/tooltip';
+import { SubscriptionTab } from './subscription-tab';
+import { VersionsTab } from './versions';
+
+function TruncatedLabelWithTooltip({ label }: { label: string }) {
+    const [isTruncated, setIsTruncated] = useState(false);
+    const spanRef = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        const el = spanRef.current;
+        if (el) {
+            setIsTruncated(el.scrollWidth > el.clientWidth);
+        }
+    }, [label]);
+    return isTruncated ? (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span ref={spanRef} className="truncate">
+                    {label}
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side='right'>
+                {label}
+            </TooltipContent>
+        </Tooltip>
+    ) : (
+        <span ref={spanRef} className="truncate">{label}</span>
+    );
+}
 
 export const SettingsModalWithProjects = observer(() => {
     const editorEngine = useEditorEngine();
@@ -42,6 +68,11 @@ export const SettingsModalWithProjects = observer(() => {
             label: SettingsTabValue.PREFERENCES,
             icon: <Icons.Person className="mr-2 h-4 w-4" />,
             component: <PreferencesTab />,
+        },
+        {
+            label: SettingsTabValue.SUBSCRIPTION,
+            icon: <Icons.CreditCard className="mr-2 h-4 w-4" />,
+            component: <SubscriptionTab />,
         },
     ];
 
@@ -78,11 +109,12 @@ export const SettingsModalWithProjects = observer(() => {
 
     const tabs = [...globalTabs, ...pagesTabs, ...projectTabs];
 
+    // TODO: use file system like code tab
     useEffect(() => {
-        if (stateManager.isSettingsModalOpen) {
-            editorEngine.pages.scanPages();
-            editorEngine.image.scanImages();
+        if (!stateManager.isSettingsModalOpen) {
+            return;
         }
+        editorEngine.pages.scanPages();
     }, [stateManager.isSettingsModalOpen]);
 
     return (
@@ -127,9 +159,15 @@ export const SettingsModalWithProjects = observer(() => {
                                     {/* Left navigation - fixed width */}
                                     <div className="flex flex-col overflow-y-scroll select-none">
                                         <div className="shrink-0 w-48 space-y-1 p-5 text-regularPlus">
-                                            <p className="text-muted-foreground text-smallPlus ml-2.5 mt-2 mb-2">
+                                            <p className="text-muted-foreground text-smallPlus ml-2.5 mt-2 mb-0.5">
                                                 Project
                                             </p>
+                                            <div className="flex items-center gap-1.5 ml-2.5 mb-3 text-muted-foreground/80">
+                                                <Icons.Branch className="min-h-3 min-w-3" />
+                                                <span className="text-small truncate max-w-30">
+                                                    {editorEngine.branches.activeBranch.name}
+                                                </span>
+                                            </div>
                                             {projectTabs.map((tab) => (
                                                 <Button
                                                     key={tab.label}
@@ -169,25 +207,12 @@ export const SettingsModalWithProjects = observer(() => {
                                                                     : 'text-muted-foreground',
                                                             )}
                                                             onClick={() =>
-                                                                (stateManager.settingsTab =
-                                                                    tab.label)
+                                                            (stateManager.settingsTab =
+                                                                tab.label)
                                                             }
                                                         >
                                                             {tab.icon}
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <span className="truncate">
-                                                                        {capitalizeFirstLetter(
-                                                                            tab.label.toLowerCase(),
-                                                                        )}
-                                                                    </span>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>
-                                                                    {capitalizeFirstLetter(
-                                                                        tab.label.toLowerCase(),
-                                                                    )}
-                                                                </TooltipContent>
-                                                            </Tooltip>
+                                                            <TruncatedLabelWithTooltip label={capitalizeFirstLetter(tab.label.toLowerCase())} />
                                                         </Button>
                                                     ))}
                                                 </div>

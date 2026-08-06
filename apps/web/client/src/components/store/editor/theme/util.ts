@@ -1,24 +1,19 @@
-import { parse, traverse, generate } from '@onlook/parser';
-import type {
-    ObjectExpression,
-    Node,
-    ObjectMethod,
-    ObjectProperty,
-    SpreadElement,
-} from '@babel/types';
-import { SystemTheme } from '@onlook/models/assets';
-import { parseHslValue } from '@onlook/utility';
 import type { Root, Rule } from 'postcss';
 import postcss from 'postcss';
+
+import type { T } from '@onlook/parser';
 import { DEFAULT_COLOR_NAME } from '@onlook/constants';
+import { SystemTheme } from '@onlook/models/assets';
+import { generate, getAstFromContent, parse, traverse } from '@onlook/parser';
+import { parseHslValue } from '@onlook/utility';
 
 export function addTailwindNestedColor(
-    colorObj: ObjectExpression,
+    colorObj: T.ObjectExpression,
     parentName: string,
     newName: string,
     newCssVarName: string,
 ) {
-    const parentColorObj = colorObj.properties.find((prop): prop is ObjectProperty =>
+    const parentColorObj = colorObj.properties.find((prop): prop is T.ObjectProperty =>
         isValidTailwindConfigProperty(prop, parentName),
     );
 
@@ -328,10 +323,10 @@ export function extractTailwindCssVariables(content: string) {
 
 export function extractColorsFromTailwindConfig(fileContent: string): Record<string, any> {
     try {
-        const ast = parse(fileContent, {
-            sourceType: 'module',
-            plugins: ['typescript'],
-        });
+        const ast = getAstFromContent(fileContent);
+        if (!ast) {
+            throw new Error(`Failed to parse file in extractColorsFromTailwindConfig`);
+        }
 
         let colors: Record<string, any> = {};
 
@@ -385,7 +380,7 @@ export function extractColorsFromTailwindConfig(fileContent: string): Record<str
  * @returns True if the property is a valid tailwind config property, false otherwise
  */
 export function isValidTailwindConfigProperty(
-    prop: ObjectProperty | ObjectMethod | SpreadElement,
+    prop: T.ObjectProperty | T.ObjectMethod | T.SpreadElement,
     keyName: string,
 ): boolean {
     return (
@@ -398,7 +393,7 @@ export function isValidTailwindConfigProperty(
     );
 }
 
-export function extractObject(node: Node): Record<string, any> {
+export function extractObject(node: T.Node): Record<string, any> {
     if (node.type !== 'ObjectExpression') {
         return {};
     }
@@ -433,7 +428,7 @@ export function extractObject(node: Node): Record<string, any> {
 }
 
 export function addTailwindRootColor(
-    colorObj: ObjectExpression,
+    colorObj: T.ObjectExpression,
     newName: string,
     newCssVarName: string,
 ) {

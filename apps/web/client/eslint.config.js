@@ -1,42 +1,11 @@
-import { FlatCompat } from '@eslint/eslintrc';
-import tseslint from 'typescript-eslint';
+// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
+import storybook from "eslint-plugin-storybook";
 
-const compat = new FlatCompat({
-    baseDirectory: import.meta.dirname,
-});
+import baseConfig from "@onlook/eslint/base";
+import nextjsConfig, { restrictEnvAccess } from "@onlook/eslint/nextjs";
+import reactConfig from "@onlook/eslint/react";
 
-export default tseslint.config(
-    {
-        ignores: ['.next'],
-    },
-    ...compat.extends('next/core-web-vitals'),
-    {
-        files: ['**/*.ts', '**/*.tsx'],
-        extends: [
-            ...tseslint.configs.recommended,
-            ...tseslint.configs.recommendedTypeChecked,
-            ...tseslint.configs.stylisticTypeChecked,
-        ],
-        rules: {
-            '@typescript-eslint/array-type': 'off',
-            '@typescript-eslint/consistent-type-definitions': 'off',
-            '@typescript-eslint/consistent-type-imports': [
-                'warn',
-                { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
-            ],
-            '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-            '@typescript-eslint/require-await': 'off',
-            '@typescript-eslint/no-misused-promises': 'warn'
-        },
-    },
-    {
-        linterOptions: {
-            reportUnusedDisableDirectives: true,
-        },
-        languageOptions: {
-            parserOptions: {
-                projectService: true,
-            },
-        },
-    },
-);
+/** @type {import('typescript-eslint').Config} */
+export default [{
+  ignores: [".next/**"],
+}, ...baseConfig, ...reactConfig, ...nextjsConfig, ...restrictEnvAccess, ...storybook.configs["flat/recommended"]];

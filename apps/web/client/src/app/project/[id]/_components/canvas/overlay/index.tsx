@@ -5,10 +5,12 @@ import { EditorMode } from '@onlook/models';
 import { cn } from '@onlook/ui/utils';
 import { observer } from 'mobx-react-lite';
 import { useMemo } from 'react';
+import { OverlayButtons } from './elements/buttons';
 import { MeasurementOverlay } from './elements/measurement';
 import { ClickRect } from './elements/rect/click';
 import { HoverRect } from './elements/rect/hover';
 import { InsertRect } from './elements/rect/insert';
+import { SnapGuidelines } from './elements/snap-guidelines';
 import { TextEditor } from './elements/text';
 
 export const Overlay = observer(() => {
@@ -54,14 +56,7 @@ export const Overlay = observer(() => {
             )}
             {!isTextEditing && clickRectsElements}
             {isTextEditing && overlayState.textEditor && (
-                <TextEditor
-                    rect={overlayState.textEditor.rect}
-                    content={overlayState.textEditor.content}
-                    styles={overlayState.textEditor.styles}
-                    onChange={overlayState.textEditor.onChange}
-                    onStop={overlayState.textEditor.onStop}
-                    isComponent={overlayState.textEditor.isComponent}
-                />
+                <TextEditor />
             )}
             {overlayState.measurement && (
                 <MeasurementOverlay
@@ -69,13 +64,10 @@ export const Overlay = observer(() => {
                     toRect={overlayState.measurement.toRect}
                 />
             )}
-            {/* TODO: Reenable overlay chat */}
-            {/* {overlayState.clickRects.length > 0 && (
-                <OverlayChat
-                    elementId={editorEngine.elements.selected[0]?.domId ?? ''}
-                    selectedEl={overlayState.clickRects[0] ?? null}
-                />
-            )} */}
+            {overlayState.clickRects.length > 0 && (
+                <OverlayButtons />
+            )}
+            <SnapGuidelines />
         </div>
     );
 });

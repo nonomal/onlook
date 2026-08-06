@@ -1,49 +1,65 @@
-import { useChatContext } from '@/app/project/[id]/_hooks/use-chat';
+'use client';
+
+import type { EditMessage } from '@/app/project/[id]/_hooks/use-chat';
 import { useEditorEngine } from '@/components/store/editor';
-import type { AssistantChatMessageImpl } from '@/components/store/editor/chat/message/assistant';
-import type { UserChatMessageImpl } from '@/components/store/editor/chat/message/user';
 import { transKeys } from '@/i18n/keys';
-import { ChatMessageRole } from '@onlook/models/chat';
-import { ChatMessageList } from '@onlook/ui/chat/chat-message-list';
+import { type ChatMessage } from '@onlook/models/chat';
+import {
+    Conversation,
+    ConversationContent,
+    ConversationScrollButton
+} from '@onlook/ui/ai-elements';
 import { Icons } from '@onlook/ui/icons';
 import { assertNever } from '@onlook/utility';
 import { observer } from 'mobx-react-lite';
 import { useTranslations } from 'next-intl';
+import { useCallback } from 'react';
 import { AssistantMessage } from './assistant-message';
 import { ErrorMessage } from './error-message';
-import { StreamMessage } from './stream-message';
 import { UserMessage } from './user-message';
 
-export const ChatMessages = observer(() => {
+interface ChatMessagesProps {
+    messages: ChatMessage[];
+    onEditMessage: EditMessage;
+    isStreaming: boolean;
+    error?: Error;
+}
+
+export const ChatMessages = observer(({
+    messages,
+    onEditMessage,
+    isStreaming,
+    error,
+}: ChatMessagesProps) => {
     const editorEngine = useEditorEngine();
     const t = useTranslations();
-    const { messages: uiMessages } = useChatContext();
-    const conversation = editorEngine.chat.conversation.current;
-    const messages = editorEngine.chat.conversation.current?.messages;
 
-    const renderMessage = (message: AssistantChatMessageImpl | UserChatMessageImpl) => {
-        let messageNode;
-        switch (message.role) {
-            case ChatMessageRole.ASSISTANT:
-                messageNode = <AssistantMessage message={message} />;
-                break;
-            case ChatMessageRole.USER:
-                messageNode = <UserMessage message={message} />;
-                break;
-            default:
-                assertNever(message);
-        }
-        return <div key={`message-${message.id}`}>{messageNode}</div>;
-    };
-
-    if (!conversation) {
-        return (
-            <div className="flex-1 flex flex-row items-center justify-center text-foreground-tertiary/80 h-full gap-2">
-                <Icons.LoadingSpinner className="animate-spin" />
-                <p className="text-regularPlus">Loading conversation...</p>
-            </div>
-        );
-    }
+    const renderMessage = useCallback(
+        (message: ChatMessage) => {
+            let messageNode;
+            switch (message.role) {
+                case 'assistant':
+                    messageNode = <AssistantMessage key={message.id} message={message} isStreaming={isStreaming} />;
+                    break;
+                case 'user':
+                    messageNode = (
+                        <UserMessage
+                            key={message.id}
+                            onEditMessage={onEditMessage}
+                            message={message}
+                        />
+                    );
+                    break;
+                case 'system':
+                    messageNode = null;
+                    break;
+                default:
+                    assertNever(message.role);
+            }
+            return <div key={message.id} className="my-2">{messageNode}</div>;
+        },
+        [onEditMessage, isStreaming],
+    );
 
     if (!messages || messages.length === 0) {
         return (
@@ -59,10 +75,17 @@ export const ChatMessages = observer(() => {
     }
 
     return (
-        <ChatMessageList contentKey={uiMessages?.map((message) => message.content).join('|') ?? ''}>
-            {messages?.map((message) => renderMessage(message))}
-            <StreamMessage />
-            <ErrorMessage />
-        </ChatMessageList>
+        <Conversation>
+            <ConversationContent className="p-0 m-0">
+                {messages.map((message) => renderMessage(message))}
+                {error && <ErrorMessage error={error} />}
+                {isStreaming && <div className="flex w-full h-full flex-row items-center gap-2 px-4 my-2 text-small content-start text-foreground-secondary">
+                    <Icons.LoadingSpinner className="animate-spin" />
+                    <p>Thinking ...</p>
+                </div>}
+            </ConversationContent>
+            <ConversationScrollButton />
+        </Conversation>
     );
 });
+

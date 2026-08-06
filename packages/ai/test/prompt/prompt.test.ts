@@ -1,10 +1,10 @@
 import { MessageContextType } from '@onlook/models';
 import { describe, expect, test } from 'bun:test';
 import path from 'path';
+import { FileContext, HighlightContext } from '../../src/contexts/classes';
 import {
+    type HydrateMessageOptions,
     getCreatePageSystemPrompt,
-    getFilesContent,
-    getHighlightsContent,
     getHydratedUserMessage,
     getSummaryPrompt,
     getSystemPrompt,
@@ -14,7 +14,7 @@ const __dirname = import.meta.dir;
 
 describe('Prompt', () => {
     // Set to true to update the data files
-    const SHOULD_UPDATE_DATA = false;
+    const SHOULD_UPDATE_DATA = true;
 
     const SHOULD_WRITE_SYSTEM = SHOULD_UPDATE_DATA;
     const SHOULD_WRITE_USER_MESSAGE = SHOULD_UPDATE_DATA;
@@ -37,38 +37,52 @@ describe('Prompt', () => {
 
     test('User message should be the same', async () => {
         const userMessagePath = path.resolve(__dirname, './data/user.txt');
+        const options: HydrateMessageOptions = {
+            totalMessages: 1,
+            currentMessageIndex: 0,
+            lastUserMessageIndex: 0,
+            lastAssistantMessageIndex: 0,
+        };
 
-        const message = getHydratedUserMessage('test', 'test', [
-            {
-                path: 'test.txt',
-                content: 'test',
-                type: MessageContextType.FILE,
-                displayName: 'test.txt',
-            },
+        const message = getHydratedUserMessage(
+            'test',
+            [{ type: 'text', text: 'test' }],
+            [
+                {
+                    path: 'test.txt',
+                    content: 'test',
+                    type: MessageContextType.FILE,
+                    displayName: 'test.txt',
+                    branchId: 'test',
+                },
 
-            {
-                path: 'test.txt',
-                start: 1,
-                end: 2,
-                content: 'test',
-                type: MessageContextType.HIGHLIGHT,
-                displayName: 'test.txt',
-            },
+                {
+                    path: 'test.txt',
+                    start: 1,
+                    end: 2,
+                    content: 'test',
+                    type: MessageContextType.HIGHLIGHT,
+                    displayName: 'test.txt',
+                    branchId: 'test',
+                },
 
-            {
-                content: 'test',
-                type: MessageContextType.ERROR,
-                displayName: 'test',
-            },
-            {
-                path: 'test',
-                type: MessageContextType.PROJECT,
-                displayName: 'test',
-                content: '',
-            },
-        ]);
+                {
+                    content: 'test',
+                    type: MessageContextType.ERROR,
+                    displayName: 'test',
+                    branchId: 'test',
+                },
+                {
+                    path: 'test-rule.md',
+                    type: MessageContextType.AGENT_RULE,
+                    displayName: 'test',
+                    content: '',
+                },
+            ],
+            options,
+        );
 
-        const prompt = message.content;
+        const prompt = message.parts[0]?.type === 'text' ? message.parts[0].text : '';
 
         if (SHOULD_WRITE_USER_MESSAGE) {
             await Bun.write(userMessagePath, prompt);
@@ -81,8 +95,15 @@ describe('Prompt', () => {
     test('User empty message should be the same', async () => {
         const userMessagePath = path.resolve(__dirname, './data/user-empty.txt');
 
-        const message = getHydratedUserMessage('test', '', []);
-        const prompt = message.content;
+        const options: HydrateMessageOptions = {
+            totalMessages: 1,
+            currentMessageIndex: 0,
+            lastUserMessageIndex: 0,
+            lastAssistantMessageIndex: 0,
+        };
+
+        const message = getHydratedUserMessage('test', [], [], options);
+        const prompt = message.parts[0]?.type === 'text' ? message.parts[0].text : '';
 
         if (SHOULD_WRITE_USER_MESSAGE) {
             await Bun.write(userMessagePath, prompt);
@@ -95,19 +116,21 @@ describe('Prompt', () => {
     test('File content should be the same', async () => {
         const fileContentPath = path.resolve(__dirname, './data/file.txt');
 
-        const prompt = getFilesContent(
+        const prompt = FileContext.getFilesContent(
             [
                 {
                     path: 'test.txt',
                     content: 'test',
                     type: MessageContextType.FILE,
                     displayName: 'test.txt',
+                    branchId: 'test',
                 },
                 {
                     path: 'test2.txt',
                     content: 'test2',
                     type: MessageContextType.FILE,
                     displayName: 'test2.txt',
+                    branchId: 'test',
                 },
             ],
             [
@@ -118,6 +141,7 @@ describe('Prompt', () => {
                     content: 'test',
                     type: MessageContextType.HIGHLIGHT,
                     displayName: 'test.txt',
+                    branchId: 'test',
                 },
             ],
         );
@@ -133,7 +157,7 @@ describe('Prompt', () => {
     test('Highlights should be the same', async () => {
         const highlightsPath = path.resolve(__dirname, './data/highlights.txt');
 
-        const prompt = getHighlightsContent('test.txt', [
+        const prompt = HighlightContext.getHighlightsContent('test.txt', [
             {
                 path: 'test.txt',
                 start: 1,
@@ -141,6 +165,7 @@ describe('Prompt', () => {
                 content: 'test',
                 type: MessageContextType.HIGHLIGHT,
                 displayName: 'test.txt',
+                branchId: 'test',
             },
             {
                 path: 'test.txt',
@@ -149,8 +174,9 @@ describe('Prompt', () => {
                 content: 'test2',
                 type: MessageContextType.HIGHLIGHT,
                 displayName: 'test.txt',
+                branchId: 'test',
             },
-        ]);
+        ], 'test');
         if (SHOULD_WRITE_HIGHLIGHTS) {
             await Bun.write(highlightsPath, prompt);
         }

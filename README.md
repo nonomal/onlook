@@ -4,10 +4,12 @@
 <img width="800" alt="header image" src="assets/web-preview.png">
 <h3 align="center">Onlook</h3>
   <p align="center">
-    Cursor for Designers
+    <strong>The design tool for AI-native designers — now in early access.</strong>
     <br />
-    <a href="https://docs.onlook.com"><strong>Explore the docs »</strong></a>
+    Onlook makes designing on top of your codebase effortless. Craft exceptional experiences with AI in code.
     <br />
+    <br />
+    <a href="https://www.onlook.com/waitlist?utm_source=github&utm_medium=readme&utm_campaign=waitlist-2026"><strong>→ Join the waitlist</strong></a>
   </p>
   <p align="center">
     👨‍💻👩‍💻👨‍💻
@@ -39,85 +41,75 @@
 [![LinkedIn][linkedin-shield]][linkedin-url]
 [![Twitter][twitter-shield]][twitter-url]
 
-[中文](https://www.readme-i18n.com/onlook-dev/onlook?lang=zh) | 
-[Español](https://www.readme-i18n.com/onlook-dev/onlook?lang=es) | 
-[Deutsch](https://www.readme-i18n.com/onlook-dev/onlook?lang=de) | 
-[français](https://www.readme-i18n.com/onlook-dev/onlook?lang=fr) | 
-[Português](https://www.readme-i18n.com/onlook-dev/onlook?lang=pt) | 
-[Русский](https://www.readme-i18n.com/onlook-dev/onlook?lang=ru) | 
-[日本語](https://www.readme-i18n.com/onlook-dev/onlook?lang=ja) | 
+[中文](https://www.readme-i18n.com/onlook-dev/onlook?lang=zh) |
+[Español](https://www.readme-i18n.com/onlook-dev/onlook?lang=es) |
+[Deutsch](https://www.readme-i18n.com/onlook-dev/onlook?lang=de) |
+[français](https://www.readme-i18n.com/onlook-dev/onlook?lang=fr) |
+[Português](https://www.readme-i18n.com/onlook-dev/onlook?lang=pt) |
+[Русский](https://www.readme-i18n.com/onlook-dev/onlook?lang=ru) |
+[日本語](https://www.readme-i18n.com/onlook-dev/onlook?lang=ja) |
 [한국어](https://www.readme-i18n.com/onlook-dev/onlook?lang=ko)
 
 </div>
 
-# The Cursor for Designers – an Open-Source, Visual-First Code Editor
+> This is the open-source visual editor that started Onlook (Next.js + Tailwind). The hosted product we're building next, for AI-native designers, is in early access via the [waitlist](https://www.onlook.com/waitlist?utm_source=github&utm_medium=readme&utm_campaign=waitlist-2026) above.
+
+
+# An Open-Source, Visual-First Code Editor
 
 Craft websites, prototypes, and designs with AI in Next.js + TailwindCSS. Make
 edits directly in the browser DOM with a visual editor. Design in realtime with
 code. An open-source alternative to Bolt.new, Lovable, V0, Replit Agent, Figma
 Make, Webflow, etc.
 
-### 🚧 🚧 🚧 Onlook for Web is still under development 🚧 🚧 🚧
-
-We're actively looking for contributors to help make Onlook for Web an
-incredible prompt-to-build experience. Check the
-[open issues](https://github.com/onlook-dev/onlook/issues) for a full list of
-proposed features (and known issues), and join our
-[Discord](https://discord.gg/hERDfFZCsH) to collaborate with hundreds of other
-builders.
 
 ## What you can do with Onlook:
 
 - [x] Create Next.js app in seconds
   - [x] Start from text or image
-  - [ ] Use prebuilt templates
-  - [ ] Import from Figma
-  - [ ] Start from GitHub repo
+  - [x] Use prebuilt templates
 - [x] Visually edit your app
   - [x] Use Figma-like UI
   - [x] Preview your app in real-time
   - [x] Manage brand assets and tokens
   - [x] Create and navigate to Pages
-  - [ ] Browse layers – _Previously in
+  - [x] Browse layers
+  - [x] Manage project Images
+  - [x] Detect and use Components – _Previously in
         [Onlook Desktop](https://github.com/onlook-dev/desktop)_
-  - [ ] Detect and use Components – _Previously in
-        [Onlook Desktop](https://github.com/onlook-dev/desktop)_
-  - [ ] Manage project Images – _Previously in
-        [Onlook Desktop](https://github.com/onlook-dev/desktop)_
+  - [ ] Drag-and-drop Components Panel
+  - [x] Use Branching to experiment with designs
 - [x] Development Tools
   - [x] Real-time code editor
   - [x] Save and restore from checkpoints
   - [x] Run commands via CLI
   - [x] Connect with app marketplace
-  - [ ] Edit code locally – _Previously in
-        [Onlook Desktop](https://github.com/onlook-dev/desktop)_
-- [ ] Deploy your app in seconds
-  - [ ] Generate sharable links
-  - [ ] Link your custom domain
+- [x] Deploy your app in seconds
+  - [x] Generate sharable links
+  - [x] Link your custom domain    
 - [ ] Collaborate with your team
-  - [ ] Real-time editing
+  - [x] Real-time editing
   - [ ] Leave comments
+- [ ] Advanced AI capabilities
+  - [x] Queue multiple messages at once
+  - [ ] Use Images as references and as assets in a project
+  - [ ] Setup and use MCPs in projects
+  - [ ] Allow Onlook to use itself as a toolcall for branch creation and iteration
+- [ ] Advanced project support
+  - [ ] Support non-NextJS projects
+  - [ ] Support non-Tailwind projects
 
 ![Onlook-GitHub-Example](https://github.com/user-attachments/assets/642de37a-72cc-4056-8eb7-8eb42714cdc4)
 
-### Onlook for Desktop (aka Onlook Alpha)
-
-We're in early preview for Onlook Web. If you're looking for the downloadable
-desktop electron app, it's moved to
-[Onlook Desktop](https://github.com/onlook-dev/desktop).
-
-Why are we moving to the web? Read about our decision:
-[Migrating from Electron to Web](https://docs.onlook.com/docs/developer/electron-to-web-migration)
-
 ## Getting Started
 
-Available soon with a [hosted app](https://onlook.com) or
-[run locally](https://docs.onlook.com/docs/developer/running-locally).
+Use our [hosted app](https://onlook.com) or
+[run locally](https://docs.onlook.com/developers/running-locally).
 
 ### Usage
 
-Onlook will run on any Next.js + TailwindCSS project, import your project
-into Onlook or start from scratch within the editor.
+Onlook will run on any Next.js + TailwindCSS project, import your project into
+Onlook or start from scratch within the editor.
 
 Use the AI chat to create or edit a project you're working on. At any time, you
 can always right-click an element to open up the exact location of the element
@@ -150,8 +142,7 @@ objects, and experiment with layouts.
 For full documentation, visit [docs.onlook.com](https://docs.onlook.com)
 
 To see how to Contribute, visit
-[Contributing to Onlook](https://docs.onlook.com/docs/developer/contributing) in
-our docs.
+[Contributing to Onlook](https://docs.onlook.com/developers) in our docs.
 
 ## How it works
 
@@ -170,7 +161,7 @@ displays DOM elements declaratively (e.g. jsx/tsx/html). We are focused on
 making it work well with Next.js and TailwindCSS for now.
 
 For a full walkthrough, check out our
-[Architecture Docs](https://docs.onlook.com/docs/developer/architecture).
+[Architecture Docs](https://docs.onlook.com/developers/architecture).
 
 ### Our Tech Stack
 
@@ -188,7 +179,7 @@ For a full walkthrough, check out our
 #### AI
 
 - [AI SDK](https://ai-sdk.dev/) - LLM client
-- [Anthropic](https://ai-sdk.dev/) - LLM model provider
+- [OpenRouter](https://openrouter.ai/) - LLM model provider
 - [Morph Fast Apply](https://morphllm.com) - Fast apply model provider
 - [Relace](https://relace.ai) - Fast apply model provider
 
@@ -225,10 +216,10 @@ See the [CONTRIBUTING.md](CONTRIBUTING.md) for instructions and code of conduct.
 - Team: [Discord](https://discord.gg/hERDfFZCsH) -
   [Twitter](https://twitter.com/onlookdev) -
   [LinkedIn](https://www.linkedin.com/company/onlook-dev/) -
-  [Email](mailto:contact@onlook.com)
+  [Email](mailto:contact@onlook.com) - [YouTube](https://youtube.com/@onlookdev)
 - Project:
   [https://github.com/onlook-dev/onlook](https://github.com/onlook-dev/onlook)
-- Website: [https://onlook.com](https://onlook.com)
+- Website: [https://onlook.com](https://onlook.com/?utm_source=github&utm_medium=readme&utm_campaign=waitlist-2026)
 
 ## License
 

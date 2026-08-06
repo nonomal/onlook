@@ -1,10 +1,11 @@
 'use client';
 
 import { useAuthContext } from '@/app/auth/auth-context';
-import { DraftImagePill } from '@/app/project/[id]/_components/right-panel/chat-tab/context-pills/draft-image-pill';
+import { ImagePill } from '@/app/project/[id]/_components/right-panel/chat-tab/context-pills/image-pill';
+import { validateImageLimit } from '@/app/project/[id]/_components/right-panel/chat-tab/context-pills/helpers';
 import { useCreateManager } from '@/components/store/create';
-import { api } from '@/trpc/react';
-import { MessageContextType, type ImageMessageContext } from '@onlook/models/chat';
+import { Routes } from '@/utils/constants';
+import { MessageContextType, type ImageMessageContext, type User } from '@onlook/models';
 import { Button } from '@onlook/ui/button';
 import { Card, CardContent, CardHeader } from '@onlook/ui/card';
 import { Icons } from '@onlook/ui/icons';
@@ -13,51 +14,65 @@ import { Textarea } from '@onlook/ui/textarea';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@onlook/ui/tooltip';
 import { cn } from '@onlook/ui/utils';
 import { compressImageInBrowser } from '@onlook/utility';
+import localforage from 'localforage';
+import { observer } from 'mobx-react-lite';
 import { AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { usePostHog } from 'posthog-js/react';
 import { useEffect, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
-export function Create({ cardKey }: { cardKey: number }) {
+const SAVED_INPUT_KEY = 'create-input';
+interface CreateInputContext {
+    prompt: string;
+    images: ImageMessageContext[];
+    timestamp: number;
+}
+
+export const Create = observer(({
+    cardKey,
+    isCreatingProject,
+    setIsCreatingProject,
+    user,
+}: {
+    cardKey: number,
+    isCreatingProject: boolean,
+    setIsCreatingProject: (isCreatingProject: boolean) => void,
+    user: User | null,
+}) => {
     const createManager = useCreateManager();
     const router = useRouter();
-    const posthog = usePostHog();
     const imageRef = useRef<HTMLInputElement>(null);
-    const { data: user } = api.user.get.useQuery();
 
     const { setIsAuthModalOpen } = useAuthContext();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, setInputValue] = useState<string>('');
     const [isDragging, setIsDragging] = useState(false);
     const [selectedImages, setSelectedImages] = useState<ImageMessageContext[]>([]);
     const [imageTooltipOpen, setImageTooltipOpen] = useState(false);
     const [isHandlingFile, setIsHandlingFile] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const isInputInvalid = !inputValue || inputValue.trim().length < 10;
     const [isComposing, setIsComposing] = useState(false);
 
     // Restore draft from localStorage if exists
     useEffect(() => {
-        const draft = localStorage.getItem('createProjectDraft');
-        if (draft && !!user?.id) {
-            try {
-                const { prompt, images, timestamp } = JSON.parse(draft);
-                // Only restore if draft is less than 1 hour old
-                if (Date.now() - timestamp < 3600000) {
+        const getDraft = async () => {
+            const draft = await localforage.getItem<CreateInputContext>(SAVED_INPUT_KEY);
+            if (draft) {
+                try {
+                    const { prompt, images } = draft;
+                    // Only restore if draft is less than 1 hour old
                     setInputValue(prompt);
                     setSelectedImages(images);
-                }
-                // Clear the draft after restoring
-                localStorage.removeItem('createProjectDraft');
-                // Run the submit function
-                createProject(prompt, images);
-            } catch (error) {
-                console.error('Error restoring draft:', error);
-                localStorage.removeItem('createProjectDraft');
-            }
-        }
-    }, []);
 
+                    // Clear the draft after restoring
+                    await localforage.removeItem(SAVED_INPUT_KEY);
+                } catch (error) {
+                    console.error('Error restoring draft:', error);
+                }
+            }
+        };
+        getDraft();
+    }, []);
 
     const handleSubmit = async () => {
         if (isInputInvalid) {
@@ -68,39 +83,35 @@ export function Create({ cardKey }: { cardKey: number }) {
     };
 
     const createProject = async (prompt: string, images: ImageMessageContext[]) => {
-        posthog.capture('user_create_project', {
-            prompt,
-        });
         if (!user?.id) {
             console.error('No user ID found');
 
-            // Store the current input and images in localStorage
-            localStorage.setItem('createProjectDraft', JSON.stringify({
+            const createInputContext: CreateInputContext = {
                 prompt,
                 images,
                 timestamp: Date.now()
-            }));
-            // Store the return URL
-            localStorage.setItem('returnUrl', window.location.pathname);
+            };
+            localforage.setItem(SAVED_INPUT_KEY, createInputContext);
             // Open the auth modal
             setIsAuthModalOpen(true);
             return;
         }
 
-        setIsLoading(true);
+        setIsCreatingProject(true);
         try {
             const project = await createManager.startCreate(user?.id, prompt, images);
             if (!project) {
                 throw new Error('Failed to create project: No project returned');
             }
-            router.push(`/project/${project.id}`);
+            router.push(`${Routes.PROJECT}/${project.id}`);
+            await localforage.removeItem(SAVED_INPUT_KEY);
         } catch (error) {
             console.error('Error creating project:', error);
             toast.error('Failed to create project', {
                 description: error instanceof Error ? error.message : String(error),
             });
         } finally {
-            setIsLoading(false);
+            setIsCreatingProject(false);
         }
     };
 
@@ -137,6 +148,13 @@ export function Create({ cardKey }: { cardKey: number }) {
     const handleNewImageFiles = async (files: File[]) => {
         const imageFiles = files.filter((file) => file.type.startsWith('image/'));
 
+        const { success, errorMessage } = validateImageLimit(selectedImages, imageFiles.length);
+        if (!success) {
+            toast.error(errorMessage);
+            setIsHandlingFile(false);
+            return;
+        }
+
         const imageContexts: ImageMessageContext[] = [];
         if (imageFiles.length > 0) {
             // Handle the dropped image files
@@ -168,7 +186,11 @@ export function Create({ cardKey }: { cardKey: number }) {
                 (await new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        resolve(reader.result as string);
+                        if (typeof reader.result === 'string') {
+                            resolve(reader.result);
+                        } else {
+                            reject(new Error('Failed to read file'));
+                        }
                     };
                     reader.onerror = reject;
                     reader.readAsDataURL(file);
@@ -176,16 +198,18 @@ export function Create({ cardKey }: { cardKey: number }) {
 
             return {
                 type: MessageContextType.IMAGE,
+                source: 'external',
                 content: base64,
                 displayName: file.name,
                 mimeType: file.type,
+                id: uuidv4(),
             };
         } catch (error) {
             console.error('Error reading file:', error);
             return null;
         }
     };
-
+    
     const handleDragStateChange = (isDragging: boolean, e: React.DragEvent) => {
         const hasImage =
             e.dataTransfer.types.length > 0 &&
@@ -235,12 +259,12 @@ export function Create({ cardKey }: { cardKey: number }) {
         <Card
             key={cardKey}
             className={cn(
-                'w-[600px] overflow-hidden gap-4 backdrop-blur-md bg-background/20',
+                'w-[600px] overflow-hidden gap-1.5 backdrop-blur-md bg-background/20 p-4',
                 isDragging && 'bg-background/40',
             )}
         >
-            <CardHeader className="text-start">{`Let's design a...`}</CardHeader>
-            <CardContent>
+            <CardHeader className="text-start p-0 text-foreground-primary/80">{`Let's design a...`}</CardHeader>
+            <CardContent className="p-0">
                 <div
                     className={cn(
                         'flex flex-col gap-3 rounded p-0 transition-colors duration-200 cursor-text',
@@ -264,7 +288,7 @@ export function Create({ cardKey }: { cardKey: number }) {
                         >
                             <AnimatePresence mode="popLayout">
                                 {selectedImages.map((imageContext) => (
-                                    <DraftImagePill
+                                    <ImagePill
                                         key={imageContext.content}
                                         context={imageContext}
                                         onRemove={() => handleRemoveImage(imageContext)}
@@ -374,10 +398,10 @@ export function Create({ cardKey }: { cardKey: number }) {
                                         ? 'text-foreground-primary'
                                         : 'bg-foreground-primary text-white hover:bg-foreground-hover',
                                 )}
-                                disabled={isInputInvalid || isLoading}
+                                disabled={isInputInvalid || isCreatingProject}
                                 onClick={handleSubmit}
                             >
-                                {isLoading ? (
+                                {isCreatingProject ? (
                                     <Icons.LoadingSpinner className="w-5 h-5 animate-pulse text-background" />
                                 ) : (
                                     <Icons.ArrowRight
@@ -396,4 +420,4 @@ export function Create({ cardKey }: { cardKey: number }) {
             </CardContent>
         </Card>
     );
-}
+});

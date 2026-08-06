@@ -1,10 +1,9 @@
 import { api } from '@/trpc/client';
 import { SandboxTemplates, Templates } from '@onlook/constants';
-import type { Project as DbProject } from '@onlook/db';
+import { createDefaultProject } from '@onlook/db';
 import { CreateRequestContextType } from '@onlook/models';
 import { type ImageMessageContext } from '@onlook/models/chat';
 import { makeAutoObservable } from "mobx";
-import { v4 as uuidv4 } from 'uuid';
 import { parseRepoUrl } from '../editor/pages/helper';
 
 export class CreateManager {
@@ -12,6 +11,18 @@ export class CreateManager {
 
     constructor() {
         makeAutoObservable(this);
+    }
+
+    async generateProjectName(prompt: string): Promise<string> {
+        try {
+            const generatedName = await api.project.generateName.mutate({
+                prompt: prompt,
+            });
+            return generatedName;
+        } catch (error) {
+            console.error('Error generating project name:', error);
+            return 'New Project';
+        }
     }
 
     async startCreate(userId: string, prompt: string, images: ImageMessageContext[]) {
@@ -26,14 +37,23 @@ export class CreateManager {
                 tags: ['prompt', userId],
             };
 
-            const { sandboxId, previewUrl } = await api.sandbox.fork.mutate({
-                sandbox: SandboxTemplates[Templates.EMPTY_NEXTJS],
-                config,
+            const [{ sandboxId, previewUrl }, projectName] = await Promise.all([
+                api.sandbox.fork.mutate({
+                    sandbox: SandboxTemplates[Templates.EMPTY_NEXTJS],
+                    config,
+                }),
+                this.generateProjectName(prompt)
+            ]);
+            const project = createDefaultProject({
+                overrides: {
+                    name: projectName,
+                },
             });
-            const project = await this.createDefaultProject(sandboxId, previewUrl);
             const newProject = await api.project.create.mutate({
                 project,
                 userId,
+                sandboxId,
+                sandboxUrl: previewUrl,
                 creationData: {
                     context: [
                         {
@@ -57,22 +77,6 @@ export class CreateManager {
         }
     }
 
-    createDefaultProject(sandboxId: string, previewUrl: string): DbProject {
-        const newProject = {
-            id: uuidv4(),
-            name: 'New project',
-            sandboxId,
-            sandboxUrl: previewUrl,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            previewImgUrl: null,
-            previewImgPath: null,
-            previewImgBucket: null,
-            description: 'Your new project',
-        } satisfies DbProject;
-        return newProject;
-    }
-
     async startGitHubTemplate(userId: string, repoUrl: string) {
         this.error = null;
         try {
@@ -91,11 +95,20 @@ export class CreateManager {
                 return;
             }
 
-            const { sandboxId, previewUrl } = await this.createSandboxFromGithub(repoUrl, branch);
-            const project = await this.createDefaultProject(sandboxId, previewUrl);
+            const [{ sandboxId, previewUrl }, projectName] = await Promise.all([
+                this.createSandboxFromGithub(repoUrl, branch),
+                this.generateProjectName(`Import from GitHub repository: ${repo}`)
+            ]);
+            const project = createDefaultProject({
+                overrides: {
+                    name: projectName,
+                },
+            });
             const newProject = await api.project.create.mutate({
                 project,
                 userId,
+                sandboxId,
+                sandboxUrl: previewUrl,
             });
             return newProject;
         }

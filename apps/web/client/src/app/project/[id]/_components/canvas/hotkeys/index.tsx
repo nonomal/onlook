@@ -1,7 +1,7 @@
 import { Hotkey } from '@/components/hotkey';
 import { useEditorEngine } from '@/components/store/editor';
 import { DefaultSettings } from '@onlook/constants';
-import { EditorMode, EditorTabValue } from '@onlook/models';
+import { EditorMode, InsertMode } from '@onlook/models';
 import type { ReactNode } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
@@ -29,19 +29,27 @@ export const HotkeysArea = ({ children }: { children: ReactNode }) => {
 
     // Modes
     useHotkeys(Hotkey.SELECT.command, () => (editorEngine.state.editorMode = EditorMode.DESIGN));
+    useHotkeys(Hotkey.CODE.command, () => (editorEngine.state.editorMode = EditorMode.CODE));
     useHotkeys(Hotkey.ESCAPE.command, () => {
         editorEngine.state.editorMode = EditorMode.DESIGN;
-        !editorEngine.text.isEditing && editorEngine.clearUI();
+        if (!editorEngine.text.isEditing) {
+            editorEngine.clearUI();
+        }
     });
     useHotkeys(Hotkey.PAN.command, () => (editorEngine.state.editorMode = EditorMode.PAN));
     useHotkeys(Hotkey.PREVIEW.command, () => (editorEngine.state.editorMode = EditorMode.PREVIEW));
+
+    // Quick mode switching with CMD+1/2/3 (overrides browser defaults)
+    useHotkeys('mod+1', () => (editorEngine.state.editorMode = EditorMode.DESIGN), { preventDefault: true });
+    useHotkeys('mod+2', () => (editorEngine.state.editorMode = EditorMode.CODE), { preventDefault: true });
+    useHotkeys('mod+3', () => (editorEngine.state.editorMode = EditorMode.PREVIEW), { preventDefault: true });
     useHotkeys(
         Hotkey.INSERT_DIV.command,
-        () => (editorEngine.state.editorMode = EditorMode.INSERT_DIV),
+        () => (editorEngine.state.insertMode = InsertMode.INSERT_DIV),
     );
     useHotkeys(
         Hotkey.INSERT_TEXT.command,
-        () => (editorEngine.state.editorMode = EditorMode.INSERT_TEXT),
+        () => (editorEngine.state.insertMode = InsertMode.INSERT_TEXT),
     );
     useHotkeys('space', () => (editorEngine.state.editorMode = EditorMode.PAN), { keydown: true });
     useHotkeys('space', () => (editorEngine.state.editorMode = EditorMode.DESIGN), { keyup: true });
@@ -56,7 +64,14 @@ export const HotkeysArea = ({ children }: { children: ReactNode }) => {
         preventDefault: true,
     });
     useHotkeys(Hotkey.ENTER.command, () => editorEngine.text.editSelectedElement(), { preventDefault: true });
-    useHotkeys([Hotkey.BACKSPACE.command, Hotkey.DELETE.command], () => editorEngine.elements.delete(), { preventDefault: true });
+    useHotkeys([Hotkey.BACKSPACE.command, Hotkey.DELETE.command], () => {
+        if (editorEngine.elements.selected.length > 0) {
+            editorEngine.elements.delete();
+        }
+        else if (editorEngine.frames.selected.length > 0 && editorEngine.frames.canDelete()) {
+            editorEngine.frames.deleteSelected();
+        }
+    }, { preventDefault: true });
 
     // Group
     useHotkeys(Hotkey.GROUP.command, () => editorEngine.group.groupSelectedElements());
@@ -67,24 +82,37 @@ export const HotkeysArea = ({ children }: { children: ReactNode }) => {
     useHotkeys(Hotkey.PASTE.command, () => editorEngine.copy.paste(), { preventDefault: true });
     useHotkeys(Hotkey.CUT.command, () => editorEngine.copy.cut(), { preventDefault: true });
     useHotkeys(Hotkey.DUPLICATE.command, () => {
-        editorEngine.copy.duplicate();
+        if (editorEngine.elements.selected.length > 0) {
+            editorEngine.copy.duplicate();
+        }
+        else if (editorEngine.frames.selected.length > 0 && editorEngine.frames.canDuplicate()) {
+            editorEngine.frames.duplicateSelected();
+        }
     }, { preventDefault: true });
 
     // AI
     useHotkeys(
         Hotkey.ADD_AI_CHAT.command,
-        () => (editorEngine.state.rightPanelTab = EditorTabValue.CHAT),
+        () => {
+            if (editorEngine.state.editorMode === EditorMode.PREVIEW) {
+                editorEngine.state.editorMode = EditorMode.DESIGN;
+            }
+            editorEngine.chat.focusChatInput();
+        }
     );
     useHotkeys(Hotkey.NEW_AI_CHAT.command, () => {
-        editorEngine.state.rightPanelTab = EditorTabValue.CHAT;
+        editorEngine.state.editorMode = EditorMode.DESIGN;
         editorEngine.chat.conversation.startNewConversation();
     });
     useHotkeys(
         Hotkey.CHAT_MODE_TOGGLE.command,
         () => {
-            editorEngine.state.rightPanelTab = EditorTabValue.CHAT;
-            // Trigger open chat mode menu
-            window.dispatchEvent(new CustomEvent('open-chat-mode-menu'));
+            // Toggle between design and preview mode
+            if (editorEngine.state.editorMode === EditorMode.PREVIEW) {
+                editorEngine.state.editorMode = EditorMode.DESIGN;
+            } else {
+                editorEngine.state.editorMode = EditorMode.PREVIEW;
+            }
         },
         { preventDefault: true },
     );

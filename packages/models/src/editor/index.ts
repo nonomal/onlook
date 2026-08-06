@@ -6,16 +6,15 @@ export interface WebviewMetadata {
 
 export enum EditorMode {
     DESIGN = 'design',
+    CODE = 'code',
     PREVIEW = 'preview',
     PAN = 'pan',
+}
+
+export enum InsertMode {
     INSERT_TEXT = 'insert-text',
     INSERT_DIV = 'insert-div',
     INSERT_IMAGE = 'insert-image',
-}
-
-export enum EditorTabValue {
-    CHAT = 'chat',
-    DEV = 'dev',
 }
 
 export enum SettingsTabValue {
@@ -34,12 +33,17 @@ export enum LeftPanelTabValue {
     IMAGES = 'images',
     WINDOWS = 'windows',
     BRAND = 'brand',
+    BRANCHES = 'branches',
     APPS = 'apps',
 }
 
 export enum BrandTabValue {
     COLORS = 'colors',
     FONTS = 'fonts',
+}
+
+export enum BranchTabValue {
+    MANAGE = 'manage',
 }
 
 export enum MouseAction {

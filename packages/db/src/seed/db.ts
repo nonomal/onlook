@@ -1,37 +1,43 @@
+import { createDefaultProject } from '@/defaults/project';
+import { Tags } from '@onlook/constants';
 import {
+    branches,
     canvases,
     conversations,
     createDefaultCanvas, createDefaultFrame, createDefaultUserCanvas,
     deployments,
     frames,
+    legacySubscriptions,
     messages,
     previewDomains,
     prices,
     products,
     projectCustomDomains,
     projects,
+    rateLimits,
     subscriptions,
     usageRecords,
     userCanvases,
     userProjects,
     users,
+    type Branch,
     type Conversation,
     type Message,
     type Price,
     type Product,
-    type Project,
+    type RateLimit,
     type Subscription,
-    type User,
+    type User
 } from '@onlook/db';
 import { db } from '@onlook/db/src/client';
 import {
-    ChatMessageRole,
     MessageContextType,
     ProjectRole,
-    type ChatMessageContext,
+    type MessageContext,
 } from '@onlook/models';
-import { PriceKey, ProductType } from '@onlook/stripe';
+import { PriceKey, ProductType, SubscriptionStatus } from '@onlook/stripe';
 import { v4 as uuidv4 } from 'uuid';
+import { createDefaultBranch } from '../defaults/branch';
 import { SEED_USER } from './constants';
 
 const user0 = {
@@ -43,24 +49,85 @@ const user0 = {
     avatarUrl: SEED_USER.AVATAR_URL,
     createdAt: new Date(),
     updatedAt: new Date(),
+    stripeCustomerId: null,
+    githubInstallationId: null,
 } satisfies User;
 
-const project0 = {
+const project0 = createDefaultProject({
+    overrides: {
+        name: 'Preload Script Test',
+    },
+});
+
+const project1 = createDefaultProject({
+    overrides: {
+        name: 'Mock Template (This doesn\'t work)',
+        tags: [Tags.TEMPLATE],
+    },
+});
+
+const branch0 = createDefaultBranch({
+    projectId: project0.id,
+    sandboxId: '123456',
+});
+
+const branch1 = {
     id: uuidv4(),
-    name: 'Preload Script Test',
-    sandboxId: '3f5rf6',
-    sandboxUrl: 'http://localhost:8084',
-    previewImgUrl: null,
-    previewImgPath: null,
-    previewImgBucket: null,
+    projectId: project0.id,
+    name: 'branch1',
+    isDefault: false,
     createdAt: new Date(),
     updatedAt: new Date(),
-    description: 'Test Project Description',
-} satisfies Project;
+    description: 'Secondary branch',
+    gitBranch: null,
+    gitCommitSha: null,
+    gitRepoUrl: null,
+    sandboxId: '123456',
+} satisfies Branch;
+
+const branch2 = {
+    id: uuidv4(),
+    projectId: project1.id,
+    name: 'main',
+    isDefault: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    description: 'Main branch',
+    gitBranch: null,
+    gitCommitSha: null,
+    gitRepoUrl: null,
+    sandboxId: '123456',
+} satisfies Branch;
+
+const branch3 = {
+    id: uuidv4(),
+    projectId: project1.id,
+    name: 'branch1',
+    isDefault: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    description: 'Secondary branch',
+    gitBranch: null,
+    gitCommitSha: null,
+    gitRepoUrl: null,
+    sandboxId: '123456',
+} satisfies Branch;
 
 const canvas0 = createDefaultCanvas(project0.id);
-const frame0 = createDefaultFrame(canvas0.id, project0.sandboxUrl);
+const frame0 = createDefaultFrame({
+    canvasId: canvas0.id,
+    branchId: branch0.id,
+    url: 'http://localhost:8084',
+});
 const userCanvas0 = createDefaultUserCanvas(user0.id, canvas0.id);
+
+const canvas1 = createDefaultCanvas(project1.id);
+const frame1 = createDefaultFrame({
+    canvasId: canvas1.id,
+    branchId: branch2.id,
+    url: 'http://localhost:8084',
+});
+const userCanvas1 = createDefaultUserCanvas(user0.id, canvas1.id);
 
 const conversation0 = {
     id: uuidv4(),
@@ -68,6 +135,20 @@ const conversation0 = {
     displayName: 'Test Conversation',
     createdAt: new Date(),
     updatedAt: new Date(),
+    suggestions: [
+        {
+            title: 'Test Suggestion',
+            prompt: 'Test Prompt',
+        },
+        {
+            title: 'Test Suggestion 2',
+            prompt: 'Test Prompt 2',
+        },
+        {
+            title: 'Test Suggestion 3',
+            prompt: 'Test Prompt 3',
+        },
+    ],
 } satisfies Conversation;
 
 const context0 = {
@@ -75,7 +156,8 @@ const context0 = {
     path: 'src/index.ts',
     displayName: 'index.ts',
     content: 'console.log("Hello, world!");',
-} satisfies ChatMessageContext;
+    branchId: branch0.id,
+} satisfies MessageContext;
 
 const context1 = {
     type: MessageContextType.HIGHLIGHT,
@@ -84,73 +166,84 @@ const context1 = {
     content: 'console.log("Hello, world!");',
     start: 0,
     end: 10,
-} satisfies ChatMessageContext;
+    branchId: branch0.id,
+} satisfies MessageContext;
 
 const contexts = [context0, context1];
 
 const message0 = {
     id: uuidv4(),
     conversationId: conversation0.id,
-    role: ChatMessageRole.USER,
+    role: 'user',
     content: 'Test message 0',
     commitOid: null,
     createdAt: new Date(),
     applied: false,
     context: contexts,
-    snapshots: {},
+    checkpoints: [],
     parts: [{ type: 'text', text: 'Test message 0' }],
+    snapshots: null,
+    usage: null,
 } satisfies Message;
 
 const message1 = {
     id: uuidv4(),
     conversationId: conversation0.id,
-    role: ChatMessageRole.ASSISTANT,
+    role: 'assistant',
     content: 'Test message 1',
     commitOid: null,
     createdAt: new Date(),
     applied: false,
     context: contexts,
     parts: [{ type: 'text', text: 'Test message 1' }],
-    snapshots: {},
+    checkpoints: [],
+    snapshots: null,
+    usage: null,
 } satisfies Message;
 
 const message2 = {
     id: uuidv4(),
     conversationId: conversation0.id,
-    role: ChatMessageRole.ASSISTANT,
+    role: 'assistant',
     content: 'Test message 2',
     commitOid: null,
     createdAt: new Date(),
     applied: false,
     context: contexts,
     parts: [{ type: 'text', text: 'Test message 2' }],
-    snapshots: {},
+    checkpoints: [],
+    snapshots: null,
+    usage: null,
 } satisfies Message;
 
 const message3 = {
     id: uuidv4(),
     conversationId: conversation0.id,
-    role: ChatMessageRole.USER,
+    role: 'user',
     content: 'Test message 3',
     commitOid: null,
     createdAt: new Date(),
     applied: false,
     context: contexts,
     parts: [{ type: 'text', text: 'Test message 3' }],
-    snapshots: {},
+    checkpoints: [],
+    snapshots: null,
+    usage: null,
 } satisfies Message;
 
 const message4 = {
     id: uuidv4(),
     conversationId: conversation0.id,
-    role: ChatMessageRole.ASSISTANT,
+    role: 'assistant',
     content: 'Test message 4',
     createdAt: new Date(),
     applied: false,
     context: contexts,
     parts: [{ type: 'text', text: 'Test message 4' }],
-    snapshots: {},
+    checkpoints: [],
+    snapshots: null,
     commitOid: null,
+    usage: null,
 } satisfies Message;
 
 const product0 = {
@@ -175,7 +268,7 @@ const subscription0 = {
     priceId: price0.id,
     startedAt: new Date(),
     updatedAt: new Date(),
-    status: 'active',
+    status: SubscriptionStatus.ACTIVE,
     stripeCustomerId: 'cus_1234567890',
     stripeSubscriptionId: 'sub_1234567890',
     stripeSubscriptionScheduleId: null,
@@ -184,7 +277,23 @@ const subscription0 = {
     scheduledPriceId: null,
     scheduledChangeAt: null,
     endedAt: null,
+    stripeCurrentPeriodStart: new Date(),
+    stripeCurrentPeriodEnd: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
 } satisfies Subscription;
+
+const rateLimit0 = {
+    id: uuidv4(),
+    userId: user0.id,
+    subscriptionId: subscription0.id,
+    max: 100,
+    left: 100,
+    startedAt: new Date(),
+    endedAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+    carryOverKey: uuidv4(),
+    carryOverTotal: 0,
+    stripeSubscriptionItemId: subscription0.stripeSubscriptionItemId,
+    updatedAt: new Date(),
+} satisfies RateLimit;
 
 export const seedDb = async () => {
     console.log('Seeding the database...');
@@ -194,17 +303,24 @@ export const seedDb = async () => {
         await tx.insert(products).values([product0]);
         await tx.insert(prices).values([price0]);
         await tx.insert(subscriptions).values([subscription0]);
-        await tx.insert(projects).values([project0]);
+        await tx.insert(rateLimits).values([rateLimit0]);
+        await tx.insert(projects).values([project0, project1]);
+        await tx.insert(branches).values([branch0, branch1, branch2, branch3]);
         await tx.insert(userProjects).values([
             {
                 userId: user0.id,
                 projectId: project0.id,
                 role: ProjectRole.OWNER,
             },
+            {
+                userId: user0.id,
+                projectId: project1.id,
+                role: ProjectRole.OWNER,
+            },
         ]);
-        await tx.insert(canvases).values([canvas0]);
-        await tx.insert(userCanvases).values([userCanvas0]);
-        await tx.insert(frames).values([frame0]);
+        await tx.insert(canvases).values([canvas0, canvas1]);
+        await tx.insert(userCanvases).values([userCanvas0, userCanvas1]);
+        await tx.insert(frames).values([frame0, frame1]);
         await tx.insert(conversations).values([conversation0]);
         await tx.insert(messages).values([message0, message1, message2, message3, message4]);
     });
@@ -221,6 +337,7 @@ export const resetDb = async () => {
         await tx.delete(userCanvases);
         await tx.delete(userProjects);
         await tx.delete(usageRecords);
+        await tx.delete(rateLimits);
         await tx.delete(subscriptions);
         await tx.delete(prices);
         await tx.delete(products);
@@ -228,9 +345,11 @@ export const resetDb = async () => {
         await tx.delete(conversations);
         await tx.delete(frames);
         await tx.delete(canvases);
+        await tx.delete(branches);
         await tx.delete(userProjects);
         await tx.delete(projects);
         await tx.delete(users);
+        await tx.delete(legacySubscriptions);
     });
 
     console.log('Database reset!');

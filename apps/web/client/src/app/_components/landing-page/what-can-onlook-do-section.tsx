@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { vujahdayScript } from '@/app/fonts';
 import { AiChatPreviewBlock } from './feature-blocks/ai-chat-preview-block';
 import { BrandComplianceBlock } from './feature-blocks/brand-compliance';
 import { ComponentsBlock } from './feature-blocks/components';
@@ -286,7 +287,11 @@ export function WhatCanOnlookDoSection() {
             <div className="w-full max-w-6xl mx-auto py-32 px-8 flex flex-col md:flex-row gap-24 md:gap-24">
                 {/* Left Column */}
                 <div className="flex-1 flex flex-col gap-24">
-                    <h2 className="text-foreground-primary text-6xl leading-[1.1] font-light mb-8 max-w-xl">What can<br />Onlook do?</h2>
+                <div className="flex-1">
+                    <h2 className="text-4xl lg:text-5xl font-light text-foreground-primary leading-tight">
+                        <span className="bg-gradient-to-l from-white/20 via-white/90 to-white/20 bg-[length:200%_100%] bg-clip-text text-transparent animate-shimmer filter drop-shadow-[0_0_14px_rgba(255,255,255,1)]">AI</span> <span className="text-foreground-tertiary">•</span> <span className="font-mono">Code</span> <span className="text-foreground-tertiary">•</span> <span className={`${vujahdayScript.className} not-italic text-6xl large:text-6xl`}>Design</span><br /> Side-by-side-by-side
+                    </h2>
+                </div>
                     <DirectEditingBlock />
                     <ComponentsBlock />
                     <RevisionHistory />
@@ -303,33 +308,30 @@ export function WhatCanOnlookDoSection() {
                 <h2 className="text-foreground-primary text-6xl text-right leading-[1.1] font-light mb-20">...and so<br />much more</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-16 gap-y-20">
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Import from GitHub or locally</div>
-                        <div className="text-foreground-secondary text-regular text-balance">Bring your existing React / Next.js / Tailwind codebase and start building</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Works With Your Codebase</div>
+                        <div className="text-foreground-secondary text-regular text-balance">Connect your existing React, Next.js, or Vue project. No rebuilding. No migration. Start designing in minutes.</div>
                     </div>
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Import from Figma</div>
-                        <div className="text-foreground-secondary text-regular text-balance">Make your designs come to life with a real working product</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Built for Teams</div>
+                        <div className="text-foreground-secondary text-regular text-balance">Share your canvas. Leave spatial comments. Work together on designs that become real PRs.</div>
                     </div>
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Publish your work</div>
-                        <div className="text-foreground-secondary text-regular text-balance">Attach a custom domain and share your work with the world</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Direct GitHub Integration</div>
+                        <div className="text-foreground-secondary text-regular text-balance">Push changes directly to your repository. Review diffs before committing.</div>
                     </div>
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Draw-in Layers</div>
-                        <div className="text-foreground-secondary text-regular text-balance">Trace divs and text directly in your designs and create code in real-time</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Ship PRs, Not Prototypes</div>
+                        <div className="text-foreground-secondary text-regular text-balance">Your changes become a real pull request. Engineers review and merge — no handoff, no translation.</div>
                     </div>
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">All your favorite hotkeys</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Power User Shortcuts</div>
                         <div className="text-foreground-secondary text-regular text-balance">
-                            <span className={`transition-all duration-250 mr-1 inline-block ${isShortcutAnimating ? 'blur-sm opacity-50 -translate-x-1' : 'blur-0 opacity-100 translate-x-0'}`}>
-                                {getKeyboardShortcut()}
-                            </span>
-                            and design lightning fast with all your favorite shortcuts
+                            All your familiar hotkeys work here. <span className={`transition-all duration-250 inline-block ${isShortcutAnimating ? 'blur-sm opacity-50 -translate-x-1' : 'blur-0 opacity-100 translate-x-0'}`}>{getKeyboardShortcut()}</span> and everything in between.
                         </div>
                     </div>
                     <div>
-                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Use Images and media assets</div>
-                        <div className="text-foreground-secondary text-regular text-balance">Manage your graphics and images all from one place</div>
+                        <div className="text-foreground-primary text-regularPlus mb-2 text-balance">Reference Anything in Chat</div>
+                        <div className="text-foreground-secondary text-regular text-balance">Drop images, mockups, or docs into your conversation. AI uses them as context for better results.</div>
                     </div>
                 </div>
             </div>

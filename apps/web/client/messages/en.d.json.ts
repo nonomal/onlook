@@ -45,11 +45,14 @@ declare const messages: {
             "showInExplorer": "Show in Explorer",
             "renameProject": "Rename Project",
             "deleteProject": "Delete Project",
+            "cloneProject": "Clone Project",
             "cancel": "Cancel",
             "delete": "Delete",
             "rename": "Rename",
+            "clone": "Clone",
             "goToAllProjects": "Go to all Projects",
             "newProject": "New Project",
+            "blankProject": "Blank Project",
             "startFromScratch": "Start from scratch",
             "importProject": "Import a project",
             "subscriptions": "Subscriptions",
@@ -57,7 +60,8 @@ declare const messages: {
             "downloadCode": "Download Code",
             "downloadingCode": "Preparing download...",
             "downloadSuccess": "Download started successfully",
-            "downloadError": "Failed to prepare download"
+            "downloadError": "Failed to prepare download",
+            "recentProjects": "Recent Projects"
         },
         "dialogs": {
             "delete": {
@@ -68,6 +72,12 @@ declare const messages: {
             "rename": {
                 "title": "Rename Project",
                 "label": "Project Name",
+                "error": "Project name can't be empty"
+            },
+            "clone": {
+                "title": "Clone Project",
+                "label": "Project Name",
+                "placeholder": "Enter name for cloned project",
                 "error": "Project name can't be empty"
             }
         },
@@ -86,14 +96,14 @@ declare const messages: {
     "welcome": {
         "title": "Welcome to Onlook",
         "titleReturn": "Welcome back to Onlook",
-        "description": "Onlook is an open-source visual editor for React apps. Design directly in your live product.",
+        "description": "A next-generation visual code editor that lets designers and product managers craft web experiences with AI.",
         "alpha": "Alpha",
         "login": {
             "github": "Login with GitHub",
             "google": "Login with Google",
             "lastUsed": "You used this last time",
             "loginToEdit": "Login to Edit",
-            "shareProjects": "Share projects, collaborate, and design more in code."
+            "shareProjects": "No credit card required • Get a site in seconds"
         },
         "terms": {
             "agreement": "By signing up, you agree to our",
@@ -182,7 +192,7 @@ declare const messages: {
             }
         },
         "footer": {
-            "unusedMessages": "Unused chat messages don't rollover to the next month"
+            "unusedMessages": "Unused chat messages will roll over to the next month."
         }
     },
     "editor": {
@@ -191,6 +201,11 @@ declare const messages: {
                 "name": "Design",
                 "description": "Edit and modify your website's design",
                 "tooltip": "Switch to design mode"
+            },
+            "code": {
+                "name": "Code",
+                "description": "Edit and modify your website's code",
+                "tooltip": "Switch to code mode"
             },
             "preview": {
                 "name": "Preview",
@@ -230,16 +245,24 @@ declare const messages: {
                             "placeholder": "Type your message...",
                             "tooltip": "Chat with AI about the selected element"
                         },
+                        "mode": {
+                            "tooltip": "Switch between Build and Ask modes"
+                        },
                         "controls": {
                             "newChat": "New Chat",
                             "history": "Chat History"
                         },
                         "settings": {
                             "showSuggestions": "Show suggestions",
+                            "showMiniChat": "Show mini chat",
+                            "autoApplyCode": "Auto-apply results",
                             "expandCodeBlocks": "Show code while rendering"
                         },
                         "miniChat": {
                             "button": "Chat with AI"
+                        },
+                        "openInCode": {
+                            "button": "Open in Code"
                         }
                     },
                     "styles": {
@@ -278,6 +301,7 @@ declare const messages: {
                         "emptyState": "Select a window to edit its settings"
                     },
                     "brand": "Brand",
+                    "branches": "Branches",
                     "apps": "Apps"
                 }
             }

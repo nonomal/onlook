@@ -1,12 +1,12 @@
-import { MessageContextType, type ChatMessageContext } from '@onlook/models/chat';
-import { Icons } from '@onlook/ui/icons';
+import { getContextClass, getContextLabel } from '@onlook/ai';
+import { DefaultSettings } from '@onlook/constants';
+import { MessageContextType, type MessageContext } from '@onlook/models/chat';
+import { NodeIcon } from '@onlook/ui/node-icon';
 import { getTruncatedFileName } from '@onlook/ui/utils';
-import { assertNever } from '@onlook/utility';
-import React from 'react';
-import { NodeIcon } from '../../../left-panel/layers-tab/tree/node-icon';
 
-export function getTruncatedName(context: ChatMessageContext) {
-    let name = context.displayName;
+export function getTruncatedName(context: MessageContext) {
+    let name = getContextLabel(context);
+
     if (context.type === MessageContextType.FILE || context.type === MessageContextType.IMAGE) {
         name = getTruncatedFileName(name);
     }
@@ -16,29 +16,33 @@ export function getTruncatedName(context: ChatMessageContext) {
     return name.length > 20 ? `${name.slice(0, 20)}...` : name;
 }
 
-export function getContextIcon(context: ChatMessageContext) {
-    let icon: React.ComponentType | React.ReactElement | null = null;
-    switch (context.type) {
-        case MessageContextType.FILE:
-            icon = Icons.File;
-            break;
-        case MessageContextType.IMAGE:
-            icon = Icons.Image;
-            break;
-        case MessageContextType.ERROR:
-            icon = Icons.InfoCircled;
-            break;
-        case MessageContextType.HIGHLIGHT:
-            return (
-                <NodeIcon tagName={context.displayName} iconClass="w-3 h-3 ml-1 mr-2 flex-none" />
-            );
-        case MessageContextType.PROJECT:
-            icon = Icons.Cube;
-            break;
-        default:
-            assertNever(context);
+export function getContextIcon(context: MessageContext) {
+    // Special case for highlight context which uses a custom component
+    if (context.type === MessageContextType.HIGHLIGHT) {
+        return (
+            <NodeIcon tagName={context.displayName} iconClass="w-3 h-3 ml-1 mr-2 flex-none" />
+        );
     }
-    if (icon) {
-        return React.createElement(icon);
+
+    const contextClass = getContextClass(context.type);
+    if (contextClass?.icon) {
+        const IconComponent = contextClass.icon;
+        return <IconComponent />;
     }
+    return null;
+}
+
+export function validateImageLimit(
+    currentImages: MessageContext[],
+    additionalCount: number = 0
+): {
+    success: boolean;
+    errorMessage?: string;
+} {
+    const totalCount = currentImages.length + additionalCount;
+    const maxImages = DefaultSettings.CHAT_SETTINGS.maxImages;
+    if (totalCount > maxImages) {
+        return { success: false, errorMessage: `You can only add up to ${maxImages} images.` };
+    }
+    return { success: true, errorMessage: undefined };
 }

@@ -12,7 +12,6 @@ import { cn } from '@onlook/ui/utils';
 import { observer } from 'mobx-react-lite';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 import { TerminalArea } from './terminal-area';
 
 const TOOLBAR_ITEMS = ({ t }: { t: ReturnType<typeof useTranslations> }) => [
@@ -34,52 +33,52 @@ const TOOLBAR_ITEMS = ({ t }: { t: ReturnType<typeof useTranslations> }) => [
         label: t(transKeys.editor.toolbar.tools.pan.name),
         tooltip: t(transKeys.editor.toolbar.tools.pan.tooltip),
     },
-    {
-        mode: EditorMode.INSERT_DIV,
-        icon: Icons.Square,
-        hotkey: Hotkey.INSERT_DIV,
-        disabled: false,
-        draggable: true,
-        label: t(transKeys.editor.toolbar.tools.insertDiv.name),
-        tooltip: t(transKeys.editor.toolbar.tools.insertDiv.tooltip),
-    },
-    {
-        mode: EditorMode.INSERT_TEXT,
-        icon: Icons.Text,
-        hotkey: Hotkey.INSERT_TEXT,
-        disabled: false,
-        draggable: true,
-        label: t(transKeys.editor.toolbar.tools.insertText.name),
-        tooltip: t(transKeys.editor.toolbar.tools.insertText.tooltip),
-    },
+    // {
+    //     mode: InsertMode.INSERT_DIV,
+    //     icon: Icons.Square,
+    //     hotkey: Hotkey.INSERT_DIV,
+    //     disabled: false,
+    //     draggable: true,
+    //     label: t(transKeys.editor.toolbar.tools.insertDiv.name),
+    //     tooltip: t(transKeys.editor.toolbar.tools.insertDiv.tooltip),
+    // },
+    // {
+    //     mode: InsertMode.INSERT_TEXT,
+    //     icon: Icons.Text,
+    //     hotkey: Hotkey.INSERT_TEXT,
+    //     disabled: false,
+    //     draggable: true,
+    //     label: t(transKeys.editor.toolbar.tools.insertText.name),
+    //     tooltip: t(transKeys.editor.toolbar.tools.insertText.tooltip),
+    // },
 ];
 
 export const BottomBar = observer(() => {
     const t = useTranslations();
     const editorEngine = useEditorEngine();
     const toolbarItems = TOOLBAR_ITEMS({ t });
-
-    // Ensure default state is set
-    useEffect(() => {
-        if (!editorEngine.state.editorMode) {
-            editorEngine.state.editorMode = EditorMode.DESIGN;
-        }
-    }, [editorEngine.state.editorMode]);
+    const shouldShow = editorEngine.state.editorMode === EditorMode.DESIGN || editorEngine.state.editorMode === EditorMode.PAN;
 
     return (
-        <AnimatePresence mode="wait">
-            {editorEngine.state.editorMode !== EditorMode.PREVIEW && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-4 overflow-hidden">
+            <AnimatePresence mode="wait">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 20 }}
-                    className="absolute left-1/2 -translate-x-1/2 bottom-4 flex flex-col border-[0.5px] border-border p-1 px-1 bg-background rounded-lg backdrop-blur drop-shadow-xl overflow-hidden"
+                    animate={{
+                        opacity: shouldShow ? 1 : 0,
+                        y: shouldShow ? 0 : 20,
+                    }}
+                    className="flex flex-col border-[0.5px] border-border p-1 px-1 bg-background rounded-lg backdrop-blur drop-shadow-xl overflow-hidden"
                     transition={{
                         type: 'spring',
                         bounce: 0.1,
                         duration: 0.4,
                         stiffness: 200,
                         damping: 25,
+                    }}
+                    style={{
+                        pointerEvents: shouldShow ? 'auto' : 'none',
+                        visibility: shouldShow ? 'visible' : 'hidden'
                     }}
                 >
                     <TerminalArea>
@@ -119,7 +118,7 @@ export const BottomBar = observer(() => {
                         </ToggleGroup>
                     </TerminalArea>
                 </motion.div>
-            )}
-        </AnimatePresence>
+            </AnimatePresence>
+        </div>
     );
 });

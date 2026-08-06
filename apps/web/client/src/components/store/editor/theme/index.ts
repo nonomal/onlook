@@ -13,12 +13,12 @@ import type { CodeDiffRequest } from '@onlook/models/code';
 import type { TailwindColor } from '@onlook/models/style';
 import {
     generate,
+    getAstFromContent,
     getNodeClasses,
     isColorsObjectProperty,
     isObjectExpression,
-    parse,
     transformAst,
-    traverse,
+    traverse
 } from '@onlook/parser';
 import { getOidFromJsxElement } from '@onlook/parser/src/code-edit/helpers';
 import { Color } from '@onlook/utility';
@@ -391,10 +391,10 @@ export class ThemeManager {
             const camelCaseName = camelCase(groupName);
 
             // Update config file
-            const updateAst = parse(configContent, {
-                sourceType: 'module',
-                plugins: ['typescript', 'jsx'],
-            });
+            const updateAst = getAstFromContent(configContent);
+            if (!updateAst) {
+                throw new Error(`Failed to parse file ${configPath}`);
+            }
 
             traverse(updateAst, {
                 ObjectProperty(path) {
@@ -406,7 +406,7 @@ export class ThemeManager {
 
                         // Find the group
                         const groupProp = colorObj.properties.find((prop) =>
-                            isValidTailwindConfigProperty(prop, camelCaseName),
+                            isValidTailwindConfigProperty(prop as any, camelCaseName),
                         );
 
                         if (groupProp && 'value' in groupProp) {
@@ -414,7 +414,7 @@ export class ThemeManager {
                                 if (colorName) {
                                     // Delete specific color within group
                                     const colorIndex = groupProp.value.properties.findIndex(
-                                        (prop) => isValidTailwindConfigProperty(prop, colorName),
+                                        (prop) => isValidTailwindConfigProperty(prop as any, colorName),
                                     );
 
                                     if (colorIndex !== -1) {
@@ -462,10 +462,10 @@ export class ThemeManager {
                 return shouldKeep;
             });
             const updatedCssContent = updatedCssLines.join('\n');
-            await this.editorEngine.sandbox.writeFile(cssPath, updatedCssContent);
+            await this.editorEngine.activeSandbox.writeFile(cssPath, updatedCssContent);
 
             const output = generate(updateAst, {}, configContent).code;
-            await this.editorEngine.sandbox.writeFile(configPath, output);
+            await this.editorEngine.activeSandbox.writeFile(configPath, output);
 
             // Also delete the color group in the class references
             const replacements: ClassReplacement[] = [];
@@ -665,34 +665,37 @@ export class ThemeManager {
         return undefined;
     }
 
-    getConfigPath(): {
+    async getConfigPath(): Promise<{
         configPath: string | null;
         cssPath: string | null;
-    } {
-        const list: string[] = this.editorEngine.sandbox.listAllFiles();
+    }> {
+        const list: {
+            path: string;
+            type: "file" | "directory";
+        }[] = await this.editorEngine.activeSandbox.listAllFiles();
 
         if (!list.length) {
             return { configPath: null, cssPath: null };
         }
 
-        const configPath = list.find((file: string) => file.includes('tailwind.config')) ?? null;
-        const cssPath = list.find((file: string) => file.includes('globals.css')) ?? null;
+        const configPath = list.find((file) => file.path.includes('tailwind.config')) ?? null;
+        const cssPath = list.find((file) => file.path.includes('globals.css')) ?? null;
 
-        return { configPath, cssPath };
+        return { configPath: configPath?.path ?? null, cssPath: cssPath?.path ?? null };
     }
 
     async scanTailwindConfig() {
         try {
-            const { configPath, cssPath } = this.getConfigPath();
+            const { configPath, cssPath } = await this.getConfigPath();
 
             if (!configPath || !cssPath) {
                 return null;
             }
 
-            const configFile = await this.editorEngine.sandbox.readFile(configPath);
-            const cssFile = await this.editorEngine.sandbox.readFile(cssPath);
-            const configContent = configFile && configFile.type === 'text' ? extractColorsFromTailwindConfig(configFile.content) : '';
-            const cssContent = cssFile && cssFile.type === 'text' ? extractTailwindCssVariables(cssFile.content) : '';
+            const configFile = await this.editorEngine.activeSandbox.readFile(configPath);
+            const cssFile = await this.editorEngine.activeSandbox.readFile(cssPath);
+            const configContent = configFile && typeof configFile === 'string' ? extractColorsFromTailwindConfig(configFile) : '';
+            const cssContent = cssFile && typeof cssFile === 'string' ? extractTailwindCssVariables(cssFile) : '';
             return {
                 configPath,
                 configContent,
@@ -712,10 +715,10 @@ export class ThemeManager {
         newColor: string,
         theme?: SystemTheme,
     ): Promise<boolean> {
-        const updateAst = parse(configContent, {
-            sourceType: 'module',
-            plugins: ['typescript', 'jsx'],
-        });
+        const updateAst = getAstFromContent(configContent);
+        if (!updateAst) {
+            throw new Error(`Failed to parse file ${configPath}`);
+        }
 
         let isUpdated = false;
         // Update the specific shade base on tailwinds color scale
@@ -794,7 +797,7 @@ export class ThemeManager {
         });
 
         const output = generate(updateAst, {}, configContent).code;
-        await this.editorEngine.sandbox.writeFile(configPath, output);
+        await this.editorEngine.activeSandbox.writeFile(configPath, output);
 
         if (!isUpdated) {
             const newCssVarName = `${colorFamily}-${shadeKey}`;
@@ -804,7 +807,7 @@ export class ThemeManager {
                 newColor,
             );
 
-            await this.editorEngine.sandbox.writeFile(cssPath, updatedCssContent);
+            await this.editorEngine.activeSandbox.writeFile(cssPath, updatedCssContent);
         } else {
             // Update the CSS file
             const originalName = `${colorFamily}-${shadeKey}`;
@@ -815,7 +818,7 @@ export class ThemeManager {
                 newColor,
                 theme,
             );
-            await this.editorEngine.sandbox.writeFile(cssPath, updatedCssContent);
+            await this.editorEngine.activeSandbox.writeFile(cssPath, updatedCssContent);
         }
 
         return isUpdated;
@@ -859,7 +862,7 @@ export class ThemeManager {
             theme,
         );
 
-        await this.editorEngine.sandbox.writeFile(cssPath, updatedCssContent);
+        await this.editorEngine.activeSandbox.writeFile(cssPath, updatedCssContent);
 
         // Update config file
         const { keyUpdated, valueUpdated, output } = this.updateTailwindConfigFile(
@@ -871,7 +874,7 @@ export class ThemeManager {
         );
 
         if (keyUpdated || valueUpdated) {
-            await this.editorEngine.sandbox.writeFile(configPath, output);
+            await this.editorEngine.activeSandbox.writeFile(configPath, output);
 
             // Update class references if the name changed
             if (keyUpdated) {
@@ -921,14 +924,14 @@ export class ThemeManager {
                 newCssVarName,
                 newColor,
             );
-            await this.editorEngine.sandbox.writeFile(cssPath, updatedCssContent);
+            await this.editorEngine.activeSandbox.writeFile(cssPath, updatedCssContent);
         }
 
         // Update config file
-        const updateAst = parse(configContent, {
-            sourceType: 'module',
-            plugins: ['typescript', 'jsx'],
-        });
+        const updateAst = getAstFromContent(configContent);
+        if (!updateAst) {
+            throw new Error(`Failed to parse file ${configPath}`);
+        }
 
         traverse(updateAst, {
             ObjectProperty(path) {
@@ -939,40 +942,41 @@ export class ThemeManager {
                     }
 
                     if (!parentName) {
-                        addTailwindRootColor(colorObj, newName, newCssVarName);
+                        addTailwindRootColor(colorObj as any, newName, newCssVarName);
                     } else {
-                        addTailwindNestedColor(colorObj, parentName, newName, newCssVarName);
+                        addTailwindNestedColor(colorObj as any, parentName, newName, newCssVarName);
                     }
                 }
             },
         });
 
         const output = generate(updateAst, { compact: false }, configContent).code;
-        await this.editorEngine.sandbox.writeFile(configPath, output);
+        await this.editorEngine.activeSandbox.writeFile(configPath, output);
 
         return { success: true };
     }
 
     async initializeTailwindColorContent(): Promise<ColorUpdate | null> {
-        const { configPath, cssPath } = this.getConfigPath();
+        const { configPath, cssPath } = await this.getConfigPath();
         if (!configPath || !cssPath) {
             return null;
         }
 
-        const files = await this.editorEngine.sandbox.readFiles([configPath, cssPath]);
-        if (!files[configPath] || !files[cssPath]) {
+        const configContent = await this.editorEngine.activeSandbox.readFile(configPath);
+        const cssContent = await this.editorEngine.activeSandbox.readFile(cssPath);
+        if (!configContent || !cssContent) {
             return null;
         }
 
-        if (files[configPath].type === 'binary' || files[cssPath].type === 'binary') {
+        if (typeof configContent !== 'string' || typeof cssContent !== 'string') {
             throw new Error('Config or CSS file is a binary file');
         }
 
         return {
             configPath,
             cssPath,
-            configContent: files[configPath].content,
-            cssContent: files[cssPath].content,
+            configContent: configContent,
+            cssContent: cssContent,
         };
     }
 
@@ -1140,20 +1144,22 @@ export class ThemeManager {
     }
 
     async updateClassReferences(replacements: ClassReplacement[]): Promise<void> {
-        const sourceFiles = this.editorEngine.sandbox.listAllFiles();
-        const filesToUpdate = sourceFiles.filter((file) => file.endsWith('.tsx')) as string[];
+        const sourceFiles = await this.editorEngine.activeSandbox.listAllFiles();
+        const filesToUpdate = sourceFiles.filter((file) => file.path.endsWith('.tsx'))
+        const activeBranchId = this.editorEngine.branches.activeBranch.id;
 
         await Promise.all(
             filesToUpdate.map(async (file) => {
-                const foundFile = await this.editorEngine.sandbox.readFile(file);
-                if (!foundFile || foundFile.type === 'binary') {
+                const fileContent = await this.editorEngine.activeSandbox.readFile(file.path);
+                if (typeof fileContent !== 'string') {
+                    console.error(`File ${file.path} is not a text file`);
                     return;
                 }
 
-                const ast = parse(foundFile.content, {
-                    sourceType: 'module',
-                    plugins: ['typescript', 'jsx'],
-                });
+                const ast = getAstFromContent(fileContent);
+                if (!ast) {
+                    throw new Error(`Failed to parse file ${file}`);
+                }
 
                 const updates = new Map<string, CodeDiffRequest>();
 
@@ -1182,6 +1188,7 @@ export class ThemeManager {
                             if (oid) {
                                 updates.set(oid, {
                                     oid,
+                                    branchId: activeBranchId,
                                     attributes: { className: newClasses.join(' ') },
                                     overrideClasses: true,
                                     textContent: null,
@@ -1194,8 +1201,8 @@ export class ThemeManager {
 
                 if (updates.size > 0) {
                     transformAst(ast, updates);
-                    const output = generate(ast, { retainLines: true }, foundFile.content).code;
-                    await this.editorEngine.sandbox.writeFile(file, output);
+                    const output = generate(ast, { retainLines: true }, fileContent).code;
+                    await this.editorEngine.activeSandbox.writeFile(file.path, output);
                 }
             }),
         );

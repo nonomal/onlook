@@ -1,14 +1,17 @@
 'use client';
 
 import { useEditorEngine } from '@/components/store/editor';
-import { SubscriptionModal } from '@/components/ui/pricing-modal.tsx';
+import { SubscriptionModal } from '@/components/ui/pricing-modal';
 import { SettingsModalWithProjects } from '@/components/ui/settings-modal/with-project';
+import { EditorAttributes } from '@onlook/constants';
+import { EditorMode } from '@onlook/models';
 import { Button } from '@onlook/ui/button';
 import { Icons } from '@onlook/ui/icons';
 import { TooltipProvider } from '@onlook/ui/tooltip';
+import { cn } from '@onlook/ui/utils';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePanelMeasurements } from '../_hooks/use-panel-measure';
 import { useStartProject } from '../_hooks/use-start-project';
 import { BottomBar } from './bottom-bar';
@@ -19,8 +22,8 @@ import { RightPanel } from './right-panel';
 import { TopBar } from './top-bar';
 
 export const Main = observer(() => {
-    const editorEngine = useEditorEngine();
     const router = useRouter();
+    const editorEngine = useEditorEngine();
     const { isProjectReady, error } = useStartProject();
     const leftPanelRef = useRef<HTMLDivElement | null>(null);
     const rightPanelRef = useRef<HTMLDivElement | null>(null);
@@ -28,6 +31,28 @@ export const Main = observer(() => {
         leftPanelRef,
         rightPanelRef,
     );
+
+    useEffect(() => {
+        function handleGlobalWheel(event: WheelEvent) {
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+
+            const canvasContainer = document.getElementById(
+                EditorAttributes.CANVAS_CONTAINER_ID,
+            );
+            if (canvasContainer?.contains(event.target as Node | null)) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        window.addEventListener('wheel', handleGlobalWheel, { passive: false });
+        return () => {
+            window.removeEventListener('wheel', handleGlobalWheel);
+        };
+    }, []);
 
     if (error) {
         return (
@@ -54,18 +79,9 @@ export const Main = observer(() => {
         );
     }
 
-    if (editorEngine.sandbox.session.isConnecting) {
-        return (
-            <div className="h-screen w-screen flex items-center justify-center gap-2">
-                <Icons.LoadingSpinner className="h-6 w-6 animate-spin text-foreground-primary" />
-                <div className="text-xl">Connecting to sandbox...</div>
-            </div>
-        );
-    }
-
     return (
         <TooltipProvider>
-            <div className="h-screen w-screen flex flex-row select-none relative">
+            <div className="h-screen w-screen flex flex-row select-none relative overflow-hidden">
                 <Canvas />
 
                 <div className="absolute top-0 w-full">
@@ -101,7 +117,10 @@ export const Main = observer(() => {
                 {/* Right Panel */}
                 <div
                     ref={rightPanelRef}
-                    className="absolute top-10 right-0 h-[calc(100%-40px)] z-50"
+                    className={cn(
+                        "absolute top-10 right-0 h-[calc(100%-40px)] z-50",
+                        editorEngine.state.editorMode === EditorMode.PREVIEW && 'hidden'
+                    )}
                 >
                     <RightPanel />
                 </div>
@@ -110,6 +129,6 @@ export const Main = observer(() => {
             </div>
             <SettingsModalWithProjects />
             <SubscriptionModal />
-        </TooltipProvider>
+        </TooltipProvider >
     );
 });

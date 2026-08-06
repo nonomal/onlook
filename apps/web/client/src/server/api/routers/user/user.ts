@@ -1,5 +1,6 @@
+import { trackEvent } from '@/utils/analytics/server';
 import { callUserWebhook } from '@/utils/n8n/webhook';
-import { toUser, userInsertSchema, users, type User } from '@onlook/db';
+import { authUsers, fromDbUser, userInsertSchema, users, type User } from '@onlook/db';
 import { extractNames } from '@onlook/utility';
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { eq } from 'drizzle-orm';
@@ -15,19 +16,23 @@ export const userRouter = createTRPCRouter({
         });
 
         const { displayName, firstName, lastName } = getUserName(authUser);
-        const userData = user ? toUser({
-            id: user.id,
+        const userData = user ? fromDbUser({
+            ...user,
             firstName: user.firstName ?? firstName,
             lastName: user.lastName ?? lastName,
             displayName: user.displayName ?? displayName,
             email: user.email ?? authUser.email,
             avatarUrl: user.avatarUrl ?? authUser.user_metadata.avatarUrl,
-            createdAt: user.createdAt ?? new Date(authUser.created_at ?? Date.now()),
-            updatedAt: user.updatedAt ?? new Date(authUser.updated_at ?? Date.now()),
         }) : null;
         return userData;
     }),
     getById: protectedProcedure.input(z.string()).query(async ({ ctx, input }) => {
+        // A user may only look themselves up by id (this returns PII + the full
+        // project list). `get` is the normal self path; guarding here closes the
+        // cross-user read while keeping the endpoint's self-lookup behavior.
+        if (input !== ctx.user.id) {
+            throw new Error('Unauthorized or not found');
+        }
         const user = await ctx.db.query.users.findFirst({
             where: eq(users.id, input),
             with: {
@@ -45,14 +50,16 @@ export const userRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }): Promise<User | null> => {
             const authUser = ctx.user;
 
+            // Pin the row to the session user — the client-supplied `input.id`
+            // must never be able to create or overwrite another user's account.
             const existingUser = await ctx.db.query.users.findFirst({
-                where: eq(users.id, input.id),
+                where: eq(users.id, authUser.id),
             });
 
             const { firstName, lastName, displayName } = getUserName(authUser);
 
             const userData = {
-                id: input.id,
+                id: authUser.id,
                 firstName: input.firstName ?? firstName,
                 lastName: input.lastName ?? lastName,
                 displayName: input.displayName ?? displayName,
@@ -60,15 +67,30 @@ export const userRouter = createTRPCRouter({
                 avatarUrl: input.avatarUrl ?? authUser.user_metadata.avatarUrl,
             };
 
-            const [user] = await ctx.db.insert(users).values(userData).onConflictDoUpdate({
-                target: [users.id],
-                set: {
-                    ...userData,
-                    updatedAt: new Date(),
-                },
-            }).returning();
+            const [user] = await ctx.db
+                .insert(users)
+                .values(userData)
+                .onConflictDoUpdate({
+                    target: [users.id],
+                    set: {
+                        ...userData,
+                        updatedAt: new Date(),
+                    },
+                }).returning();
 
             if (!existingUser) {
+                await trackEvent({
+                    distinctId: input.id,
+                    event: 'user_first_signup',
+                    properties: {
+                        email: userData.email,
+                        firstName: userData.firstName,
+                        lastName: userData.lastName,
+                        displayName: userData.displayName,
+                        source: 'web beta',
+                    },
+                });
+
                 await callUserWebhook({
                     email: userData.email,
                     firstName: userData.firstName,
@@ -81,6 +103,9 @@ export const userRouter = createTRPCRouter({
             return user ?? null;
         }),
     settings: userSettingsRouter,
+    delete: protectedProcedure.mutation(async ({ ctx }) => {
+        await ctx.db.delete(authUsers).where(eq(authUsers.id, ctx.user.id));
+    }),
 });
 
 function getUserName(authUser: SupabaseUser) {

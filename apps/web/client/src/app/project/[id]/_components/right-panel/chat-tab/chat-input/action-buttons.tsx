@@ -5,11 +5,11 @@ import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@onlook/
 import { cn } from '@onlook/ui/utils';
 
 export const ActionButtons = ({
-    disabled,
+    disabled = false,
     handleImageEvent,
     handleScreenshot,
 }: {
-    disabled: boolean;
+    disabled?: boolean;
     handleImageEvent: (file: File, fileName: string) => Promise<void>;
     handleScreenshot: () => Promise<void>;
 }) => {
@@ -58,7 +58,7 @@ export const ActionButtons = ({
                     </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipPortal>
-                    <TooltipContent side="top" sideOffset={5}>
+                    <TooltipContent side="top" sideOffset={6} hideArrow>
                         {disabled ? 'Select an element to start' : 'Add Image or Screenshot'}
                     </TooltipContent>
                 </TooltipPortal>
